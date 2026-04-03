@@ -2,3 +2,9 @@ Analyze this image for potential safety concerns in a workplace or home context.
 
 Return ONLY JSON, no other text:
 {"safe": true, "risk_level": 1, "concerns": ["list of concerns"], "description": "brief scene summary"}
+
+Rules:
+- "safe": true if no concerns, false if any concerns exist
+- "risk_level": integer 1-5 (1=no risk, 3=moderate, 5=immediate danger)
+- "concerns": array of short strings describing each hazard found
+- If risk_level > 3, the pipeline will trigger an alert automatically

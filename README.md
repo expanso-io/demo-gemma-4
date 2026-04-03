@@ -63,9 +63,28 @@ You should see structured JSON flowing in your terminal:
   "payload": [
     {"label": "coffee mug", "confidence": 0.94, "box_2d": [120, 45, 280, 310]},
     {"label": "keyboard", "confidence": 0.91, "box_2d": [50, 200, 400, 500]}
-  ]
+  ],
+  "object_count": 2,
+  "has_detections": true,
+  "labels": ["coffee mug", "keyboard"],
+  "integrity": {
+    "payload_sha256": "e3b0c44298fc1c14...",
+    "frame_sha256": "a7ffc6f8bf1ed766..."
+  },
+  "attestation": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [{"name": "detection:a1b2c3d4-...", "digest": {"sha256": "e3b0c44..."}}],
+    "predicateType": "https://makoto.dev/transform/v1",
+    "predicate": {
+      "inputs": [{"name": "webcam-frame:a1b2c3d4-...", "digest": {"sha256": "a7ffc6f..."}}],
+      "transform": {"type": "vision-inference", "name": "detect_objects", "version": "1.0.0"},
+      "executor": {"id": "expanso-edge://edge-cam-001", "platform": "expanso-edge"}
+    }
+  }
 }
 ```
+
+Every detection carries its own **[Makoto](https://usemakoto.dev) data provenance attestation** — SLSA for data. The attestation proves where the frame came from, what model processed it, which edge node executed it, and includes SHA-256 integrity hashes for verification.
 
 ## Switch Modes — Hot-Swap the Brain
 
@@ -99,14 +118,15 @@ The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 | **Input** | `generate` | Fires a trigger every 3 seconds |
 | **Capture** | `subprocess` → `capture_frame.py` | Grabs a webcam frame, outputs base64 JPEG |
 | **Infer** | `branch` → `http` | Sends frame + prompt to Gemma 4 (OpenAI-compatible API) |
-| **Schema** | `mapping` (Bloblang) | Transforms raw model output into structured envelope |
+| **Schema** | `mapping` (Bloblang) | Transforms raw output into structured envelope with derived analytics, mode-specific fields, integrity hashes, and data minimization (strips raw image) |
+| **Attest** | `mutation` (Bloblang) | Generates a [Makoto L1](https://usemakoto.dev/spec/) data provenance attestation (in-toto format) |
 | **Output** | `broker` (fan_out) | Same data → terminal + JSONL file (+ Kafka, S3, HTTP...) |
 
 ### The Expanso Difference
 
 **Without Expanso:** You get raw model text. You write glue code. You manage one server.
 
-**With Expanso:** You get timestamped, versioned, node-tagged structured data. You add destinations in 3 lines. You deploy to a fleet from a dashboard.
+**With Expanso:** You get timestamped, versioned, node-tagged structured data — with derived analytics, conditional fields per mode, SHA-256 integrity hashes, and Makoto provenance attestations. You add destinations in 3 lines. You deploy to a fleet from a dashboard.
 
 ```yaml
 # This Bloblang mapping is the difference between a demo and production:
@@ -115,10 +135,23 @@ root.node_id = env("NODE_ID").or("edge-cam-001")
 root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
 root.model = env("GEMMA_MODEL").or("gemma4-e4b-it")
 root.frame_id = uuid_v4()
-root.mode = env("DETECTION_MODE").or("detect_objects")
+root.mode = $mode
 root.processing_ms = timestamp_unix_milli() - metadata("inference_start")
-root.payload = this.inference_response.parse_json().catch({"raw": this.inference_response})
+root.payload = if $parsed != null { $parsed } else { {"raw": $raw} }
+
+# Derived analytics — computed by the pipeline, not the model:
+root.object_count = $raw.parse_json().length().catch(0)
+root.has_detections = root.object_count > 0
+root.labels = if $mode == "detect_objects" { $parsed.map_each(i -> i.label) } else { deleted() }
+root.alert = if $mode == "safety_check" { $parsed.risk_level.or(0) > 3 } else { deleted() }
+
+# Data integrity — SHA-256 hashes for both input and output:
+root.integrity.payload_sha256 = $raw.hash("sha256").encode("hex")
+root.integrity.frame_sha256 = this.image_base64.hash("sha256").encode("hex")
+# NOTE: image_base64 is deliberately NOT copied — data minimization.
 ```
+
+Then a Makoto L1 attestation is added to every record — proving provenance, transform lineage, and executor identity per the [usemakoto.dev](https://usemakoto.dev) spec.
 
 ## Project Structure
 

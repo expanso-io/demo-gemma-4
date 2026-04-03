@@ -103,29 +103,145 @@ pipeline:
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 3: Transform into structured, schematized output   │
     # │                                                         │
-    # │ This is the Expanso value prop: raw model output goes   │
-    # │ in, timestamped + versioned + node-tagged structured    │
-    # │ data comes out. Downstream systems consume clean JSON.  │
+    # │ THIS IS THE EXPANSO VALUE PROP.                         │
+    # │                                                         │
+    # │ Raw model output goes in. What comes out is:            │
+    # │   • Timestamped, versioned, node-tagged                 │
+    # │   • Derived analytics (counts, flags, labels)           │
+    # │   • Mode-specific conditional fields                    │
+    # │   • SHA-256 integrity hashes                            │
+    # │   • Image data stripped (data minimization)             │
+    # │                                                         │
+    # │ This is the difference between an AI demo               │
+    # │ and a production data pipeline.                         │
     # └─────────────────────────────────────────────────────────┘
     - mapping: |
-        # ── Structured envelope (stable across all modes) ──
+        # ── Parse model response (with graceful error handling) ──
+        let raw = this.inference_response
+        let parsed = $raw.parse_json().catch(null)
+        let mode = env("DETECTION_MODE").or("detect_objects")
+
+        # ━━ ENVELOPE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Stable across ALL modes. Downstream systems can always
+        # count on these fields existing.
         root.timestamp = now().ts_format("2006-01-02T15:04:05.000Z07:00")
         root.node_id = env("NODE_ID").or("edge-cam-001")
         root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
         root.model = env("GEMMA_MODEL").or("gemma4-e4b-it")
         root.frame_id = uuid_v4()
-        root.mode = env("DETECTION_MODE").or("detect_objects")
+        root.mode = $mode
 
-        # ── Inference timing ──
+        # ━━ INFERENCE TIMING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         root.processing_ms = timestamp_unix_milli() - metadata("inference_start")
 
-        # ── Payload: parse model JSON or wrap raw text ──
-        root.payload = this.inference_response.parse_json().catch({
-          "raw": this.inference_response
-        })
+        # ━━ PAYLOAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Parse model JSON or wrap raw text so downstream never breaks.
+        root.payload = if $parsed != null { $parsed } else { {"raw": $raw} }
 
-        # ── Token usage (if reported by server) ──
+        # ━━ DERIVED ANALYTICS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Computed BY the pipeline, not by the model.
+        # This is what you can't get from `curl localhost:11434`.
+
+        # Object/detection count — works for any array-returning mode
+        root.object_count = $raw.parse_json().length().catch(0)
+        root.has_detections = root.object_count > 0
+
+        # ━━ MODE-SPECIFIC FIELDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Bloblang conditionals: different modes produce different
+        # output schemas. Same pipeline, different shapes.
+
+        # detect_objects / detect_shapes → extract just the labels
+        root.labels = if ($mode == "detect_objects" || $mode == "detect_shapes") && $parsed != null {
+          $parsed.map_each(item -> item.label.or(item.shape).or("unknown")).catch([])
+        } else { deleted() }
+
+        # safety_check → promote risk fields + compute alert flag
+        root.risk_level = if $mode == "safety_check" && $parsed != null {
+          $parsed.risk_level.or(0)
+        } else { deleted() }
+
+        root.safe = if $mode == "safety_check" && $parsed != null {
+          $parsed.safe.or(true)
+        } else { deleted() }
+
+        root.alert = if $mode == "safety_check" && $parsed != null {
+          $parsed.risk_level.or(0) > 3
+        } else { deleted() }
+
+        # read_text → promote the extracted text to top level
+        root.extracted_text = if $mode == "read_text" && $parsed != null {
+          $parsed.text.or("")
+        } else { deleted() }
+
+        # ━━ DATA INTEGRITY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # SHA-256 hashes for both input frame and model output.
+        # Downstream can verify nothing was tampered with.
+        root.integrity = {
+          "payload_sha256": $raw.hash("sha256").encode("hex"),
+          "frame_sha256": this.image_base64.hash("sha256").encode("hex")
+        }
+
+        # ━━ TOKEN USAGE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         root.tokens = this.tokens_used
+
+        # NOTE: image_base64 is deliberately NOT copied to root.
+        # The raw frame never reaches downstream — data minimization.
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 4: Makoto L1 Data Provenance Attestation           │
+    # │                                                         │
+    # │ Every detection carries a Makoto attestation proving:   │
+    # │   • Where the data came from (camera + node ID)         │
+    # │   • What transform was applied (model + prompt mode)    │
+    # │   • Who executed it (this Expanso Edge node)            │
+    # │   • Integrity hashes for verification                   │
+    # │                                                         │
+    # │ Spec: https://usemakoto.dev/spec/                       │
+    # │ This is SLSA for data. No other AI demo does this.      │
+    # └─────────────────────────────────────────────────────────┘
+    - mutation: |
+        root.attestation = {
+          "_type": "https://in-toto.io/Statement/v1",
+          "subject": [{
+            "name": "detection:" + this.frame_id,
+            "digest": {
+              "sha256": this.integrity.payload_sha256,
+              "recordCount": "1"
+            }
+          }],
+          "predicateType": "https://makoto.dev/transform/v1",
+          "predicate": {
+            "inputs": [{
+              "name": "webcam-frame:" + this.frame_id,
+              "digest": {
+                "sha256": this.integrity.frame_sha256
+              }
+            }],
+            "transform": {
+              "type": "https://makoto.dev/transforms/vision-inference",
+              "name": this.mode,
+              "version": this.pipeline_version,
+              "parameters": {
+                "model": this.model,
+                "prompt_mode": this.mode,
+                "temperature": 0.1,
+                "max_tokens": 1024
+              },
+              "codeRef": {
+                "uri": "https://github.com/expanso-io/demo-gemma-4",
+                "pipeline": "pipeline.yaml"
+              }
+            },
+            "executor": {
+              "id": "expanso-edge://" + this.node_id,
+              "platform": "expanso-edge"
+            },
+            "metadata": {
+              "processedOn": this.timestamp,
+              "processingMs": this.processing_ms
+            }
+          }
+        }
 
 # ── Output: Fan out to multiple destinations ───────────────────
 #
