@@ -1,0 +1,4 @@
+Analyze this image for potential safety concerns in a workplace or home context. Identify any hazards, unsafe conditions, or objects that could pose a risk.
+
+Return ONLY JSON, no other text:
+{"safe": true, "risk_level": 1, "concerns": ["list of concerns"], "description": "brief scene summary"}

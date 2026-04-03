@@ -1,2 +1,7 @@
 .pi/
 .pi-lens/
+.claude/
+.ruff_cache/
+detections/
+__pycache__/
+*.pyc

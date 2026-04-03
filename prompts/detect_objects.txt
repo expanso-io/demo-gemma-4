@@ -1,0 +1,4 @@
+Detect all objects visible in this image. For each object, estimate your confidence and provide a bounding box.
+
+Return ONLY a JSON array, no other text:
+[{"label": "object name", "confidence": 0.0-1.0, "box_2d": [y1, x1, y2, x2]}]

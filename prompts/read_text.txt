@@ -1,0 +1,4 @@
+Read all text visible in this image. Transcribe exactly what is written, noting whether it is handwritten or printed.
+
+Return ONLY JSON, no other text:
+{"text": "the exact text", "type": "handwritten|printed|mixed", "language": "en", "confidence": 0.0-1.0}

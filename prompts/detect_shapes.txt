@@ -1,0 +1,4 @@
+Identify all geometric shapes visible in this image (triangles, squares, circles, rectangles, stars, etc). Note their color and approximate position.
+
+Return ONLY a JSON array, no other text:
+[{"shape": "triangle", "color": "red", "position": "left|center|right", "confidence": 0.0-1.0}]

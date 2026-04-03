@@ -1,0 +1,165 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Gemma 4 × Expanso Edge — "See, Think, Ship" Vision Pipeline
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Captures webcam frames, sends them to a local Gemma 4 vision
+# model, transforms the output into structured schematized data,
+# and fans it out to multiple destinations.
+#
+# Usage:
+#   ./run.sh                      # detect objects (default)
+#   ./run.sh detect_shapes        # detect geometric shapes
+#   ./run.sh read_text            # OCR / handwriting
+#   ./run.sh safety_check         # safety monitoring
+#   ./run.sh describe_scene       # scene description
+#
+# Configuration (environment variables):
+#   CAPTURE_INTERVAL  Frame capture interval    (default: 3s)
+#   INFERENCE_URL     Ollama/llama.cpp server   (default: http://localhost:11434)
+#   GEMMA_MODEL       Model name                (default: gemma4-e4b-it)
+#   VISION_PROMPT     The prompt sent to Gemma 4 (loaded from prompts/ by run.sh)
+#   DETECTION_MODE    Label for output records   (default: detect_objects)
+#   NODE_ID           Edge node identifier       (default: edge-cam-001)
+#   PIPELINE_VERSION  Version tag for output     (default: 1.0.0)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ── Input: Generate a trigger every N seconds ──────────────────
+input:
+  generate:
+    mapping: 'root = ""'
+    interval: "${CAPTURE_INTERVAL:3s}"
+
+# ── Pipeline: Capture → Infer → Structure ─────────────────────
+pipeline:
+  processors:
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 1: Capture a frame from the webcam                 │
+    # │                                                         │
+    # │ The subprocess stays alive between captures — the       │
+    # │ camera opens once, and each trigger produces one frame. │
+    # │ Output: {"image_base64": "/9j/4AAQ..."}                 │
+    # └─────────────────────────────────────────────────────────┘
+    - subprocess:
+        name: python3
+        args: ["-u", "capture_frame.py"]
+        max_buffer: 2097152  # 2 MB — enough for 640×480 JPEG base64
+
+    - mapping: |
+        root = content().string().parse_json()
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 2: Send frame to Gemma 4 for vision inference      │
+    # │                                                         │
+    # │ Uses a branch processor to:                             │
+    # │   1. Build an OpenAI-compatible request (request_map)   │
+    # │   2. POST to the local inference server (http)          │
+    # │   3. Extract the response (result_map)                  │
+    # │                                                         │
+    # │ The model runs locally via Ollama — no cloud needed.    │
+    # └─────────────────────────────────────────────────────────┘
+    - mutation: |
+        meta inference_start = timestamp_unix_milli()
+
+    - branch:
+        request_map: |
+          let prompt = env("VISION_PROMPT").or("Detect all objects visible in this image. Return ONLY a JSON array: [{\"label\": \"name\", \"confidence\": 0.0-1.0, \"box_2d\": [y1, x1, y2, x2]}]")
+
+          root = {
+            "model": env("GEMMA_MODEL").or("gemma4-e4b-it"),
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": $prompt
+                  },
+                  {
+                    "type": "image_url",
+                    "image_url": {
+                      "url": "data:image/jpeg;base64," + this.image_base64
+                    }
+                  }
+                ]
+              }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 1024,
+            "stream": false
+          }
+        processors:
+          - http:
+              url: "${INFERENCE_URL:http://localhost:11434}/v1/chat/completions"
+              verb: POST
+              headers:
+                Content-Type: application/json
+              timeout: 60s
+              retries: 1
+        result_map: |
+          root.inference_response = this.choices.0.message.content
+          root.tokens_used = this.usage
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 3: Transform into structured, schematized output   │
+    # │                                                         │
+    # │ This is the Expanso value prop: raw model output goes   │
+    # │ in, timestamped + versioned + node-tagged structured    │
+    # │ data comes out. Downstream systems consume clean JSON.  │
+    # └─────────────────────────────────────────────────────────┘
+    - mapping: |
+        # ── Structured envelope (stable across all modes) ──
+        root.timestamp = now().ts_format("2006-01-02T15:04:05.000Z07:00")
+        root.node_id = env("NODE_ID").or("edge-cam-001")
+        root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
+        root.model = env("GEMMA_MODEL").or("gemma4-e4b-it")
+        root.frame_id = uuid_v4()
+        root.mode = env("DETECTION_MODE").or("detect_objects")
+
+        # ── Inference timing ──
+        root.processing_ms = timestamp_unix_milli() - metadata("inference_start")
+
+        # ── Payload: parse model JSON or wrap raw text ──
+        root.payload = this.inference_response.parse_json().catch({
+          "raw": this.inference_response
+        })
+
+        # ── Token usage (if reported by server) ──
+        root.tokens = this.tokens_used
+
+# ── Output: Fan out to multiple destinations ───────────────────
+#
+# Same detection → terminal + archive. Add Kafka, S3, PostgreSQL,
+# Datadog, or any of Expanso's 69+ output components in seconds.
+#
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      # 1. Real-time terminal display
+      - stdout:
+          codec: lines
+
+      # 2. Structured JSONL archive (one file per day)
+      - file:
+          path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
+          codec: lines
+
+      # ── Uncomment to add more destinations ──────────────
+      #
+      # # 3. Forward to any HTTP API (webhook, Slack, PagerDuty)
+      # - http_client:
+      #     url: https://your-api.com/detections
+      #     verb: POST
+      #     headers:
+      #       Content-Type: application/json
+      #
+      # # 4. Stream to Kafka
+      # - kafka:
+      #     addresses: ["localhost:9092"]
+      #     topic: vision-detections
+      #
+      # # 5. Archive to S3
+      # - aws_s3:
+      #     bucket: my-detections-bucket
+      #     path: 'edge/${! env("NODE_ID") }/${! now().ts_format("2006-01-02") }/${! uuid_v4() }.json'
