@@ -44,9 +44,13 @@ export DETECTION_MODE="$MODE"
 # ── Configurable defaults ─────────────────────────────────
 export NODE_ID="${NODE_ID:-edge-cam-001}"
 export INFERENCE_URL="${INFERENCE_URL:-http://localhost:11434}"
-export GEMMA_MODEL="${GEMMA_MODEL:-gemma4-e4b-it}"
+export GEMMA_MODEL="${GEMMA_MODEL:-gemma4:e4b}"
 export CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-3s}"
 export PIPELINE_VERSION="${PIPELINE_VERSION:-1.0.0}"
+# Camera: set CAMERA_URL for RTSP/HTTP IP cameras, or CAMERA_INDEX for USB
+# Example: export CAMERA_URL="rtsp://user:pass@192.168.2.10:554/stream"
+export CAMERA_URL="${CAMERA_URL:-}"
+export CAMERA_INDEX="${CAMERA_INDEX:-0}"
 
 # ── Print banner ──────────────────────────────────────────
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -59,6 +63,11 @@ echo "  Model:    ${GEMMA_MODEL}"
 echo "  Server:   ${INFERENCE_URL}"
 echo "  Interval: ${CAPTURE_INTERVAL}"
 echo "  Node:     ${NODE_ID}"
+if [ -n "$CAMERA_URL" ]; then
+    echo "  Camera:   $(echo "$CAMERA_URL" | sed 's|://[^:]*:[^@]*@|://***:***@|')"
+else
+    echo "  Camera:   /dev/video${CAMERA_INDEX}"
+fi
 echo ""
 echo "  Prompt:"
 echo "  $(head -1 "$PROMPT_FILE")"

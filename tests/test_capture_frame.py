@@ -101,11 +101,13 @@ class TestCaptureFrameScript:
             proc.kill()
             pytest.fail("capture_frame.py timed out after 10s")
 
-        lines = stdout.decode().strip().split("\n")
-        assert len(lines) >= 1, f"Expected at least 1 output line, got {len(lines)}"
+        lines = [l for l in stdout.decode().strip().split("\n") if l]
+        # Filter out status messages, keep only frame outputs
+        frame_lines = [l for l in lines if '"image_base64"' in l]
+        assert len(frame_lines) >= 1, f"Expected at least 1 frame line, got {len(frame_lines)} (total lines: {len(lines)})"
 
         # Parse the JSON
-        data = json.loads(lines[0])
+        data = json.loads(frame_lines[0])
         assert "image_base64" in data, f"Missing image_base64 key. Got: {list(data.keys())}"
 
         # Validate base64
@@ -139,9 +141,11 @@ class TestCaptureFrameScript:
             pytest.fail("Timed out")
 
         lines = [l for l in stdout.decode().strip().split("\n") if l]
-        assert len(lines) == 3, f"Expected 3 frames, got {len(lines)}"
+        # Filter out status messages, keep only frame outputs
+        frame_lines = [l for l in lines if '"image_base64"' in l]
+        assert len(frame_lines) == 3, f"Expected 3 frames, got {len(frame_lines)} (total lines: {len(lines)})"
 
-        for i, line in enumerate(lines):
+        for i, line in enumerate(frame_lines):
             data = json.loads(line)
             assert "image_base64" in data, f"Frame {i} missing image_base64"
 

@@ -16,7 +16,7 @@
 # Configuration (environment variables):
 #   CAPTURE_INTERVAL  Frame capture interval    (default: 3s)
 #   INFERENCE_URL     Ollama/llama.cpp server   (default: http://localhost:11434)
-#   GEMMA_MODEL       Model name                (default: gemma4-e4b-it)
+#   GEMMA_MODEL       Model name                (default: gemma4:e4b)
 #   VISION_PROMPT     The prompt sent to Gemma 4 (loaded from prompts/ by run.sh)
 #   DETECTION_MODE    Label for output records   (default: detect_objects)
 #   NODE_ID           Edge node identifier       (default: edge-cam-001)
@@ -66,7 +66,7 @@ pipeline:
           let prompt = env("VISION_PROMPT").or("Detect all objects visible in this image. Return ONLY a JSON array: [{\"label\": \"name\", \"confidence\": 0.0-1.0, \"box_2d\": [y1, x1, y2, x2]}]")
 
           root = {
-            "model": env("GEMMA_MODEL").or("gemma4-e4b-it"),
+            "model": env("GEMMA_MODEL").or("gemma4:e4b"),
             "messages": [
               {
                 "role": "user",
@@ -127,7 +127,7 @@ pipeline:
         root.timestamp = now().ts_format("2006-01-02T15:04:05.000Z07:00")
         root.node_id = env("NODE_ID").or("edge-cam-001")
         root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
-        root.model = env("GEMMA_MODEL").or("gemma4-e4b-it")
+        root.model = env("GEMMA_MODEL").or("gemma4:e4b")
         root.frame_id = uuid_v4()
         root.mode = $mode
 

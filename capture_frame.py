@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
-Webcam Frame Capture for Expanso Edge Pipeline
-================================================
+Frame Capture for Expanso Edge Pipeline
+========================================
 
 Runs as a long-lived subprocess inside an Expanso Edge pipeline.
 For each line received on stdin (the trigger), captures one frame
-from the webcam and writes a single-line JSON object to stdout:
+and writes a single-line JSON object to stdout:
 
     {"image_base64": "/9j/4AAQ..."}
 
+Supports USB webcams, RTSP IP cameras, and HTTP MJPEG streams.
 The camera stays open between captures for fast response times.
 
 Usage:
-    # Standalone test (Ctrl+C to stop):
+    # USB webcam (default):
     echo "" | python3 capture_frame.py
+
+    # RTSP IP camera:
+    CAMERA_URL="rtsp://user:pass@192.168.2.10:554/h264Preview_01_sub" \
+      echo "" | python3 capture_frame.py
 
     # Inside Expanso Edge pipeline (see pipeline.yaml):
     #   subprocess:
@@ -38,6 +43,9 @@ except ImportError:
 
 
 # ── Configuration ──────────────────────────────────────────────
+# CAMERA_URL takes priority: supports rtsp://, http://, or file paths.
+# Falls back to CAMERA_INDEX (integer) for local USB/CSI cameras.
+CAMERA_URL = os.environ.get("CAMERA_URL", "")
 CAMERA_INDEX = int(os.environ.get("CAMERA_INDEX", "0"))
 CAPTURE_WIDTH = int(os.environ.get("CAPTURE_WIDTH", "640"))
 CAPTURE_HEIGHT = int(os.environ.get("CAPTURE_HEIGHT", "480"))
@@ -45,21 +53,35 @@ JPEG_QUALITY = int(os.environ.get("JPEG_QUALITY", "80"))
 WARMUP_FRAMES = int(os.environ.get("WARMUP_FRAMES", "5"))
 
 
-def main():
-    # ── Open camera ────────────────────────────────────────────
-    cap = cv2.VideoCapture(CAMERA_INDEX)
+def open_camera():
+    """Open camera from URL (RTSP/HTTP) or device index."""
+    source = CAMERA_URL if CAMERA_URL else CAMERA_INDEX
+    source_label = CAMERA_URL if CAMERA_URL else f"device {CAMERA_INDEX}"
+
+    cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(
-            json.dumps({"error": f"Could not open camera {CAMERA_INDEX}"}),
+            json.dumps({"error": f"Could not open camera: {source_label}"}),
             flush=True,
         )
         sys.exit(1)
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_HEIGHT)
+    # Set resolution (only applies to USB/CSI cameras, ignored by RTSP)
+    if not CAMERA_URL:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAPTURE_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAPTURE_HEIGHT)
 
-    # Warmup: let auto-exposure settle
-    for _ in range(WARMUP_FRAMES):
+    return cap, source_label
+
+
+def main():
+    # ── Open camera ────────────────────────────────────────────
+    cap, source_label = open_camera()
+    print(json.dumps({"status": f"Camera opened: {source_label}"}), flush=True)
+
+    # Warmup: let auto-exposure settle (skip for RTSP — already streaming)
+    warmup = 1 if CAMERA_URL else WARMUP_FRAMES
+    for _ in range(warmup):
         cap.read()
 
     # Graceful shutdown
