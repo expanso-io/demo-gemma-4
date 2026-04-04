@@ -586,16 +586,14 @@
     function refreshCamera() {
       const img = document.getElementById('cameraImg');
       const placeholder = document.getElementById('cameraPlaceholder');
-      const newImg = new Image();
-      newImg.onload = () => {
-        img.src = newImg.src;
-        img.style.display = 'block';
-        placeholder.style.display = 'none';
-      };
-      newImg.onerror = () => {
-        // Keep existing image or show placeholder
-      };
-      newImg.src = '/api/snapshot?' + Date.now();
+      const url = '/api/snapshot?' + Date.now();
+      fetch(url).then(r => {
+        if (r.ok && r.headers.get('content-type') === 'image/jpeg') {
+          img.src = url;
+          img.style.display = 'block';
+          placeholder.style.display = 'none';
+        }
+      }).catch(() => {});
     }
 
     // ── Init ───────────────────────────────

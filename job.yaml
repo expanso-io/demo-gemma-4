@@ -1,0 +1,6 @@
+name: gemma4-vision-demo
+type: pipeline
+count: 1
+pipeline:
+  source: inline
+  config: !include pipeline.yaml

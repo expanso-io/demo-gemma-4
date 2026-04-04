@@ -203,11 +203,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             sse_clients.append(q)
 
         try:
-            # Send recent history as initial burst
-            for det in reversed(recent_detections[-10:]):
-                self.wfile.write(f"data: {json.dumps(det)}\n\n".encode())
-            self.wfile.flush()
-
+            # No history replay — only show live pipeline data
             while True:
                 try:
                     msg = q.get(timeout=15)
