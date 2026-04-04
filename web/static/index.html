@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemma 4 × Expanso Edge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base: #141414;
+      --bg-surface: #1c1c1c;
+      --bg-elevated: #242424;
+      --border: rgba(255,255,255,0.08);
+      --border-active: rgba(255,255,255,0.15);
+      --text-primary: #f1f5f9;
+      --text-secondary: #9f9f9f;
+      --text-dim: rgba(255,255,255,0.4);
+      --violet: #9259ED;
+      --violet-dim: rgba(146,89,237,0.15);
+      --blue: #0055FF;
+      --ice: #33CCFF;
+      --green: #52CD42;
+      --red: #FF4A0E;
+      --orange: #ff9f0a;
+      --radius: 4px;
+      --font-sans: 'Figtree', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────── */
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-left h1 {
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .header-left h1 span {
+      color: var(--violet);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .status-dot.active { background: var(--green); }
+    .status-dot.error { background: var(--red); }
+
+    .mode-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--bg-elevated);
+      padding: 4px 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .main { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ──────────────────────────── */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+    }
+
+    .card-body { padding: 16px; }
+    .card-body.flush { padding: 0; }
+
+    /* ── Camera Feed ────────────────────── */
+    .camera-container {
+      position: relative;
+      background: var(--bg-elevated);
+      aspect-ratio: 16/9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .camera-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .camera-placeholder {
+      color: var(--text-dim);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .camera-placeholder .icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    /* ── Metrics Row ───────────────────── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    .metric {
+      background: var(--bg-surface);
+      padding: 12px 16px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .metric-value.accent { color: var(--violet); }
+    .metric-value.alert { color: var(--red); }
+
+    /* ── JSON Output ───────────────────── */
+    .json-output {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .json-output .key { color: var(--ice); }
+    .json-output .string { color: var(--green); }
+    .json-output .number { color: var(--orange); }
+    .json-output .boolean { color: var(--violet); }
+    .json-output .null { color: var(--text-dim); }
+
+    /* ── Detection History ─────────────── */
+    .history {
+      margin-top: 16px;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .history-table th {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      text-align: left;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .history-table td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .history-table tr:hover td {
+      background: var(--bg-elevated);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+    }
+    .badge.mode { background: var(--violet-dim); color: var(--violet); }
+    .badge.alert-true { background: rgba(255,74,14,0.15); color: var(--red); }
+    .badge.alert-false { background: rgba(82,205,66,0.15); color: var(--green); }
+
+    /* ── Skeleton Loading ──────────────── */
+    .skeleton {
+      background: var(--bg-elevated);
+      border-radius: var(--radius);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+    .skeleton-line { height: 14px; margin-bottom: 8px; }
+    .skeleton-line.w60 { width: 60%; }
+    .skeleton-line.w80 { width: 80%; }
+    .skeleton-line.w40 { width: 40%; }
+
+    /* ── Attestation Toggle ─────────────── */
+    .attestation-toggle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .attestation-toggle:hover { color: var(--text-primary); }
+    .attestation-toggle .arrow { transition: transform 100ms; }
+    .attestation-toggle.open .arrow { transform: rotate(90deg); }
+
+    .attestation-body {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+    .attestation-body.open { display: block; }
+
+    /* ── Footer ─────────────────────────── */
+    .footer {
+      padding: 16px 0;
+      margin-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .footer a {
+      color: var(--violet);
+      text-decoration: none;
+    }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="status-dot" id="statusDot"></div>
+        <h1>Gemma 4 <span>×</span> Expanso Edge</h1>
+      </div>
+      <div class="mode-label" id="modeLabel">waiting</div>
+    </header>
+
+    <!-- Main Grid -->
+    <div class="main">
+
+      <!-- Left: Camera + Metrics -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Camera Feed</span>
+            <span class="card-title" id="nodeId">—</span>
+          </div>
+          <div class="card-body flush">
+            <div class="camera-container" id="cameraContainer">
+              <div class="camera-placeholder" id="cameraPlaceholder">
+                <span class="icon">◎</span>
+                Waiting for camera...
+              </div>
+              <img id="cameraImg" style="display:none" alt="Camera feed">
+            </div>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-label">Objects</div>
+              <div class="metric-value" id="metricObjects">—</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Latency</div>
+              <div class="metric-value" id="metricLatency">—</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Tokens</div>
+              <div class="metric-value" id="metricTokens">—</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Model</div>
+              <div class="metric-value" id="metricModel" style="font-size:14px">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Detection Output -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Latest Detection</span>
+            <span class="card-title" id="detectionTime">—</span>
+          </div>
+          <div class="card-body flush" id="jsonContainer">
+            <!-- Skeleton state -->
+            <div class="json-output" id="jsonSkeleton">
+              <div class="skeleton skeleton-line w80"></div>
+              <div class="skeleton skeleton-line w60"></div>
+              <div class="skeleton skeleton-line w80"></div>
+              <div class="skeleton skeleton-line w40"></div>
+              <div class="skeleton skeleton-line w60"></div>
+              <div class="skeleton skeleton-line w80"></div>
+            </div>
+            <div class="json-output" id="jsonOutput" style="display:none"></div>
+          </div>
+          <!-- Attestation (progressive disclosure) -->
+          <div class="attestation-toggle" id="attestationToggle" style="display:none"
+               onclick="toggleAttestation()">
+            <span class="arrow">▸</span> Makoto L1 Attestation
+          </div>
+          <div class="attestation-body" id="attestationBody">
+            <div class="json-output" id="attestationJson" style="font-size:12px;max-height:200px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detection History -->
+    <div class="history">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Detection History</span>
+          <span class="card-title" id="historyCount">0 detections</span>
+        </div>
+        <div class="card-body flush">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Mode</th>
+                <th>Objects</th>
+                <th>Labels</th>
+                <th>Latency</th>
+                <th>Alert</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="6" style="color:var(--text-dim);text-align:center;padding:24px">
+                Waiting for detections...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Gemma 4 × Expanso Edge — See, Think, Ship</span>
+      <span>
+        Provenance: <a href="https://usemakoto.dev" target="_blank">Makoto L1</a>
+      </span>
+    </footer>
+
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────
+    let detectionCount = 0;
+    let connected = false;
+
+    // ── SSE Connection ─────────────────────
+    function connectSSE() {
+      const es = new EventSource('/api/stream');
+
+      es.onopen = () => {
+        connected = true;
+        document.getElementById('statusDot').className = 'status-dot active';
+      };
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDetection(data);
+        } catch (err) {
+          console.error('Parse error:', err);
+        }
+      };
+
+      es.onerror = () => {
+        connected = false;
+        document.getElementById('statusDot').className = 'status-dot error';
+        setTimeout(connectSSE, 3000);
+      };
+    }
+
+    // ── Handle Detection ───────────────────
+    function handleDetection(d) {
+      detectionCount++;
+
+      // Mode label
+      document.getElementById('modeLabel').textContent = d.mode || '—';
+
+      // Metrics
+      document.getElementById('metricObjects').textContent = d.object_count ?? '—';
+      document.getElementById('metricLatency').textContent =
+        d.processing_ms ? d.processing_ms + 'ms' : '—';
+      document.getElementById('metricTokens').textContent =
+        d.tokens?.total_tokens ?? '—';
+      document.getElementById('metricModel').textContent = d.model || '—';
+      document.getElementById('nodeId').textContent = d.node_id || '—';
+
+      // Alert styling
+      const objEl = document.getElementById('metricObjects');
+      if (d.alert === true) {
+        objEl.className = 'metric-value alert';
+      } else if (d.has_detections) {
+        objEl.className = 'metric-value accent';
+      } else {
+        objEl.className = 'metric-value';
+      }
+
+      // Timestamp
+      if (d.timestamp) {
+        const t = new Date(d.timestamp);
+        document.getElementById('detectionTime').textContent =
+          t.toLocaleTimeString();
+      }
+
+      // JSON output (syntax highlighted, without attestation)
+      const display = { ...d };
+      const attestation = display.attestation;
+      delete display.attestation;
+      delete display.integrity; // Keep UI clean, attestation has it
+
+      document.getElementById('jsonSkeleton').style.display = 'none';
+      const jsonEl = document.getElementById('jsonOutput');
+      jsonEl.style.display = 'block';
+      jsonEl.innerHTML = syntaxHighlight(JSON.stringify(display, null, 2));
+
+      // Attestation (progressive disclosure)
+      if (attestation) {
+        document.getElementById('attestationToggle').style.display = 'flex';
+        document.getElementById('attestationJson').innerHTML =
+          syntaxHighlight(JSON.stringify(attestation, null, 2));
+      }
+
+      // History table
+      addHistoryRow(d);
+    }
+
+    // ── Syntax Highlighting ────────────────
+    function syntaxHighlight(json) {
+      return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+        (match) => {
+          let cls = 'number';
+          if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'key' : 'string';
+          } else if (/true|false/.test(match)) {
+            cls = 'boolean';
+          } else if (/null/.test(match)) {
+            cls = 'null';
+          }
+          return `<span class="${cls}">${match}</span>`;
+        }
+      );
+    }
+
+    // ── History Table ──────────────────────
+    function addHistoryRow(d) {
+      const tbody = document.getElementById('historyBody');
+
+      // Remove placeholder
+      if (detectionCount === 1) {
+        tbody.innerHTML = '';
+      }
+
+      const tr = document.createElement('tr');
+
+      const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
+      const labels = (d.labels || []).join(', ') || '—';
+      const alertBadge = d.alert === true
+        ? '<span class="badge alert-true">ALERT</span>'
+        : d.alert === false
+        ? '<span class="badge alert-false">OK</span>'
+        : '—';
+
+      tr.innerHTML = `
+        <td>${time}</td>
+        <td><span class="badge mode">${d.mode || '—'}</span></td>
+        <td>${d.object_count ?? '—'}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${labels}</td>
+        <td>${d.processing_ms ? d.processing_ms + 'ms' : '—'}</td>
+        <td>${alertBadge}</td>
+      `;
+
+      tbody.insertBefore(tr, tbody.firstChild);
+
+      // Keep max 20 rows
+      while (tbody.children.length > 20) {
+        tbody.removeChild(tbody.lastChild);
+      }
+
+      document.getElementById('historyCount').textContent =
+        detectionCount + ' detection' + (detectionCount !== 1 ? 's' : '');
+    }
+
+    // ── Attestation Toggle ─────────────────
+    function toggleAttestation() {
+      const toggle = document.getElementById('attestationToggle');
+      const body = document.getElementById('attestationBody');
+      toggle.classList.toggle('open');
+      body.classList.toggle('open');
+    }
+
+    // ── Camera Refresh ─────────────────────
+    function refreshCamera() {
+      const img = document.getElementById('cameraImg');
+      const placeholder = document.getElementById('cameraPlaceholder');
+      const newImg = new Image();
+      newImg.onload = () => {
+        img.src = newImg.src;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+      };
+      newImg.onerror = () => {
+        // Keep existing image or show placeholder
+      };
+      newImg.src = '/api/snapshot?' + Date.now();
+    }
+
+    // ── Init ───────────────────────────────
+    connectSSE();
+    refreshCamera();
+    setInterval(refreshCamera, 2000);
+  </script>
+</body>
+</html>

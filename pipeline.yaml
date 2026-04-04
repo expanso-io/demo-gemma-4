@@ -261,9 +261,19 @@ output:
           path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
           codec: lines
 
+      # 3. Live dashboard (web/server.py on port 9090)
+      - try:
+          - http_client:
+              url: "${DASHBOARD_URL:http://localhost:9090}/api/detection"
+              verb: POST
+              headers:
+                Content-Type: application/json
+              retries: 0
+          - drop: {}
+
       # ── Uncomment to add more destinations ──────────────
       #
-      # # 3. Forward to any HTTP API (webhook, Slack, PagerDuty)
+      # # 4. Forward to any HTTP API (webhook, Slack, PagerDuty)
       # - http_client:
       #     url: https://your-api.com/detections
       #     verb: POST
