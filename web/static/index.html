@@ -425,10 +425,16 @@
     <!-- Footer -->
     <footer class="footer">
       <span>Gemma 4 × Expanso Edge — See, Think, Ship</span>
-      <span>
+      <span id="footerMeta">
         Provenance: <a href="https://usemakoto.dev" target="_blank">Makoto L1</a>
       </span>
     </footer>
+    <div style="padding:4px 0;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);display:flex;justify-content:space-between">
+      <span>Node: <span id="footerNode">—</span></span>
+      <span>Job: <span id="footerJob">j-b8a8fade</span></span>
+      <span>Network: <span id="footerNetwork">2ppqjfwxo9agxi</span></span>
+      <span>Orchestrator: <a href="https://cloud.expanso.io" target="_blank" style="color:var(--text-dim)">cloud.expanso.io</a></span>
+    </div>
 
   </div>
 
@@ -477,6 +483,7 @@
         d.tokens?.total_tokens ?? '—';
       document.getElementById('metricModel').textContent = d.model || '—';
       document.getElementById('nodeId').textContent = d.node_id || '—';
+      document.getElementById('footerNode').textContent = d.node_id || '—';
 
       // Alert styling
       const objEl = document.getElementById('metricObjects');
