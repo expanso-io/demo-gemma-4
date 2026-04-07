@@ -6,9 +6,11 @@
 
 ## The Golden Rule
 
-**This machine has 7.4GB of RAM shared between CPU and GPU. There is no room for mistakes.**
+**This machine has 7.4GB of RAM shared between CPU and GPU. Swap is your friend — use it aggressively.**
 
-Running two heavy processes at once (e.g., llama-server + a Python training script, or two model servers) will push into swap, thrash the NVMe, and grind everything to a halt. On this machine, swap is a sign something went wrong — not a safety net.
+With only 7.4GB unified RAM, the model server + system baseline already consume most of physical memory. Swap on NVMe is fast enough to keep things running smoothly — the 8GB swapfile + 3.8GB zram gives us 12GB of overflow. The key is making sure the *hot path* (GPU inference, KV cache) stays in physical RAM while less-critical memory (Python overhead, file caches, idle process pages) gets paged out.
+
+What kills this machine isn't swap usage — it's running **two GPU-hungry processes at once** (e.g., llama-server + Ollama, or two model loads). The GPU can't page to swap; once physical RAM is exhausted for GPU allocations, the OOM killer arrives.
 
 ## What's Running (Normal State)
 
@@ -22,7 +24,7 @@ Running two heavy processes at once (e.g., llama-server + a Python training scri
 | System (journald, NetworkManager, etc.) | ~200MB | OS baseline | Yes |
 | **Total baseline** | **~1.6GB** | | |
 
-That leaves ~5.8GB for the model in GPU memory. The Q4_K_M GGUF (3.2GB) fits well, with ~2.6GB headroom for context, KV cache, and temporary allocations.
+That leaves ~5.8GB of physical RAM for the model's GPU memory. The Q4_K_M GGUF (3.2GB) fits, with ~2.6GB headroom for context and KV cache. CPU-side allocations from Python, the pipeline, and system services happily spill into swap — this is expected and fine on NVMe.
 
 ## Before Starting Anything
 
@@ -54,8 +56,8 @@ pkill -f "python3.*train" 2>/dev/null       # Kill any training scripts
 pkill -f "ollama" 2>/dev/null               # Kill Ollama if running
 docker stop $(docker ps -q) 2>/dev/null     # Stop stray containers
 
-# 2. Verify memory is clean
-free -h   # Should show <2GB used before starting the model
+# 2. Check memory state
+free -h   # Swap usage is fine; just make sure no other model is loaded
 
 # 3. Start the model server
 cd ~/demo-gemma-4
@@ -87,7 +89,7 @@ sleep 2 && free -h
 | Running `pip install` with a build step | Compilation eats all 6 cores + RAM | Install on Hetzner, scp the wheel |
 | Running `docker build` | Layer caching + compilation = RAM bomb | Build on Hetzner, push to registry |
 | Opening a browser on the Jetson | Chromium alone eats 500MB+ | SSH from laptop, view dashboard remotely |
-| Running `claude` (this CLI) + inference | Claude uses ~500MB; combined with model = tight | Stop the model server while doing dev work, restart after |
+| Running `claude` (this CLI) + inference | Claude uses ~500MB; pushes more into swap but usually OK | Monitor with `free -h`; stop model server if swap thrashing starts |
 | Two SSH sessions both running heavy things | Easy to forget what's running where | Use `tmux` and keep one session |
 | `git clone` of a large repo | Git can spike to 1GB+ during clone | Clone on Hetzner, rsync what you need |
 | Running any Python ML library (torch, etc.) | `import torch` alone = 500MB+ | Do ML work on Hetzner |
@@ -105,12 +107,18 @@ echo "=== Memory ===" && free -h && echo "=== Swap ===" && swapon --show && echo
 tegrastats --interval 2000
 ```
 
-### Swap alarm — if swap usage climbs, something's wrong
+### Swap monitoring — normal usage is fine, thrashing is the problem
 ```bash
+# Check swap I/O rate (si/so columns = pages swapped in/out per second)
+# Sustained high si+so = thrashing. Occasional spikes are fine.
+vmstat 2 5
+
+# Watch swap usage over time — steady is OK, rapidly climbing is not
 while true; do
   SWAP_USED=$(free -m | awk '/Swap:/ {print $3}')
-  if [ "$SWAP_USED" -gt 500 ]; then
-    echo "WARNING: Swap usage ${SWAP_USED}MB — check processes!"
+  echo "$(date +%H:%M:%S) Swap: ${SWAP_USED}MB"
+  if [ "$SWAP_USED" -gt 8000 ]; then
+    echo "WARNING: Swap nearly full (${SWAP_USED}MB/12000MB) — check processes!"
     ps aux --sort=-%mem | head -5
   fi
   sleep 10
@@ -138,12 +146,12 @@ sudo reboot
 
 ## Claude Code Sessions
 
-Running `claude` (this CLI) uses ~500MB RSS. Combined with the model server (~1GB) and system baseline (~600MB), that's ~2.1GB before the model loads into GPU memory.
+Running `claude` (this CLI) uses ~500MB RSS. This will push some system memory into swap — that's expected and fine on NVMe.
 
 **Guidelines:**
-- It's fine to run Claude Code while the model server is running — just don't also run training or docker builds
-- If you need to do heavy dev work (installing packages, running tests), stop the model server first: `./start-server.sh stop`
-- When done with dev work, restart: `./start-server.sh start`
+- It's fine to run Claude Code while the model server is running — CPU-side memory pages out to swap, GPU memory stays pinned
+- If you're also running the pipeline + Claude Code + model server and things feel sluggish, check `vmstat 2` for swap thrashing (high si/so columns)
+- For heavy work (large package installs, docker builds), stop the model server to free physical RAM: `./start-server.sh stop`
 
 ## Disk Space
 
