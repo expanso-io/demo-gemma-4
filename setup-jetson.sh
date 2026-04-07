@@ -66,7 +66,9 @@ start_server() {
             --host 0.0.0.0 \
             --port "${PORT}" \
             --n-gpu-layers 99 \
-            --ctx-size 4096 \
+            --ctx-size 2048 \
+            --n-batch 128 \
+            --flash-attn \
             --threads 4
 
     echo "Waiting for model to load..."

@@ -45,7 +45,7 @@ frame_lock = threading.Lock()
 sse_clients = []
 sse_lock = threading.Lock()
 recent_detections = []
-MAX_HISTORY = 50
+MAX_HISTORY = 20
 
 
 def broadcast_detection(data: dict):

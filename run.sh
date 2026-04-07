@@ -44,13 +44,16 @@ export DETECTION_MODE="$MODE"
 # ── Configurable defaults ─────────────────────────────────
 export NODE_ID="${NODE_ID:-edge-cam-001}"
 export INFERENCE_URL="${INFERENCE_URL:-http://localhost:11434}"
-export GEMMA_MODEL="${GEMMA_MODEL:-gemma4:e4b}"
-export CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-3s}"
+export GEMMA_MODEL="${GEMMA_MODEL:-gemma4-fast}"
+export CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-5s}"
 export PIPELINE_VERSION="${PIPELINE_VERSION:-1.0.0}"
 # Camera: set CAMERA_URL for RTSP/HTTP IP cameras, or CAMERA_INDEX for USB
 # Example: export CAMERA_URL="rtsp://user:pass@192.168.2.10:554/stream"
 export CAMERA_URL="${CAMERA_URL:-}"
 export CAMERA_INDEX="${CAMERA_INDEX:-0}"
+export CAPTURE_WIDTH="${CAPTURE_WIDTH:-320}"
+export CAPTURE_HEIGHT="${CAPTURE_HEIGHT:-240}"
+export JPEG_QUALITY="${JPEG_QUALITY:-70}"
 
 # ── Print banner ──────────────────────────────────────────
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
