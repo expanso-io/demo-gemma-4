@@ -1,0 +1,32 @@
+[Unit]
+Description=Gemma 4 Vision Pipeline (Expanso Edge)
+After=gemma4-server.service
+Requires=gemma4-server.service
+# Pipeline is useless without the inference server
+BindsTo=gemma4-server.service
+
+[Service]
+Type=simple
+User=daaronch
+Group=daaronch
+WorkingDirectory=/home/daaronch/demo-gemma-4
+EnvironmentFile=-/home/daaronch/demo-gemma-4/.env
+
+Environment=INFERENCE_URL=http://localhost:8081
+Environment=NODE_ID=edge-cam-001
+Environment=CAPTURE_INTERVAL=12s
+Environment=PIPELINE_VERSION=2.0.0
+
+ExecStartPre=/bin/bash -c '\
+    curl -sf http://localhost:8081/health || \
+    { echo "Inference server not healthy"; exit 1; }'
+
+ExecStart=/usr/local/bin/expanso-edge run pipeline.yaml
+
+Restart=on-failure
+RestartSec=15
+# Pipeline can page to swap freely — it's CPU-side work
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target

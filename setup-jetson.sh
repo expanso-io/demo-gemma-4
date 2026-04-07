@@ -24,11 +24,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Configuration ──────────────────────────────────
-MODEL_DIR="${HOME}/models/gemma4-e2b"
+MODEL_DIR="${HOME}/models/gemma4-demo"
 CONTAINER_NAME="gemma4-server"
 CONTAINER_IMAGE="dustynv/llama_cpp:r36.4.0"
-MODEL_FILE="gemma-4-E2B-it-Q3_K_S.gguf"
-MMPROJ_FILE="mmproj-BF16.gguf"
+MODEL_FILE="gemma-4-E2B-it.Q4_K_M.gguf"
+MMPROJ_FILE="gemma-4-E2B-it.BF16-mmproj.gguf"
 HF_BASE="https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main"
 PORT=8081
 

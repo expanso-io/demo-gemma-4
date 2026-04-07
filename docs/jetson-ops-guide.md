@@ -36,7 +36,7 @@ ps aux --sort=-%mem | head -10
 # Quick one-liner: anything using >100MB?
 ps aux --sort=-%rss | awk 'NR<=1 || $6>100000' | head -15
 
-# Is swap being used? If >100MB, something's wrong
+# Swap usage (expected — NVMe swap is fast)
 swapon --show
 
 # GPU memory (Jetson shares RAM, so this is part of the 7.4GB)
@@ -46,39 +46,60 @@ cat /sys/devices/gpu.0/load 2>/dev/null   # 0-1000 scale
 tegrastats --interval 1000 | head -3
 ```
 
-## Starting the Demo Stack
+## Managing the Demo Stack
 
-**Always start in this order** — model server first, then pipeline:
+The stack is managed via `demo-ctl` and systemd services. This handles dependency ordering,
+health checks, conflict detection, and automatic restarts.
 
+### First-time setup (run once)
 ```bash
-# 1. Stop anything that shouldn't be running
-pkill -f "python3.*train" 2>/dev/null       # Kill any training scripts
-pkill -f "ollama" 2>/dev/null               # Kill Ollama if running
-docker stop $(docker ps -q) 2>/dev/null     # Stop stray containers
-
-# 2. Check memory state
-free -h   # Swap usage is fine; just make sure no other model is loaded
-
-# 3. Start the model server
 cd ~/demo-gemma-4
-./start-server.sh start
-
-# 4. Verify it's healthy
-./start-server.sh test
-
-# 5. Start the pipeline
-./run.sh
+./demo-ctl install     # Installs systemd services, enables on boot
 ```
 
-## Stopping Cleanly
-
+### Daily operations
 ```bash
-# Stop pipeline first, then model server
-pkill -f "expanso-edge" 2>/dev/null
-./start-server.sh stop
+./demo-ctl start       # Start full stack (server → pipeline → dashboard → watchdog)
+./demo-ctl stop        # Stop everything cleanly (reverse order)
+./demo-ctl restart     # Stop then start
+./demo-ctl status      # Health check + memory + swap + disk
+./demo-ctl logs        # Tail all logs (or: logs server|pipeline|dashboard|watchdog)
+./demo-ctl doctor      # Full system diagnosis
+```
 
-# Verify everything released
-sleep 2 && free -h
+### What `demo-ctl start` does
+1. **Preflight** — checks for conflicting processes (Ollama, stray llama-servers), verifies model files exist
+2. **Starts gemma4-server** — loads GGUF into GPU, waits for health endpoint
+3. **Starts gemma4-pipeline** — Expanso Edge running pipeline.yaml (depends on server)
+4. **Starts gemma4-dashboard** — Web UI on :9090
+5. **Starts gemma4-watchdog** — Monitors health + swap thrashing, auto-restarts if needed
+
+### systemd services
+
+| Service | Purpose | OOM Priority | Restart |
+|---|---|---|---|
+| `gemma4-server` | llama.cpp inference on :8081 | -500 (last to kill) | on-failure, 10s |
+| `gemma4-pipeline` | Expanso Edge vision pipeline | +200 (kill before server) | on-failure, 15s |
+| `gemma4-dashboard` | Web dashboard on :9090 | +500 (first to kill) | on-failure, 5s |
+| `gemma4-watchdog` | Health + swap monitoring | — | always, 30s |
+
+The pipeline `BindsTo` the server — if the server stops, the pipeline stops automatically.
+The server `Conflicts` with Ollama — systemd won't let both run.
+
+### Manual start (without systemd)
+If you need to run things manually (e.g., debugging):
+```bash
+./start-server.sh start    # Start llama-server in background
+./start-server.sh test     # Verify inference works
+./run.sh                   # Start pipeline (foreground)
+```
+
+### Stopping cleanly
+```bash
+./demo-ctl stop            # Recommended: stops in reverse dependency order
+
+# Or manually:
+sudo systemctl stop gemma4-pipeline gemma4-server
 ```
 
 ## Things That Will Kill This Machine

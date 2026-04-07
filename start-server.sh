@@ -15,11 +15,18 @@
 set -euo pipefail
 
 MODEL_DIR="${HOME}/models/gemma4-demo"
-LLAMA_SERVER="/tmp/llama.cpp/build/bin/llama-server"
+LLAMA_SERVER="/opt/llama-server/llama-server"
+LLAMA_SERVER_LEGACY="/tmp/llama.cpp/build/bin/llama-server"
 PORT="${LLAMA_PORT:-8081}"
 LOG="/tmp/llama-server.log"
 
-export LD_LIBRARY_PATH="/tmp/llama.cpp/build/bin:/tmp/llama.cpp/build/ggml/src:${LD_LIBRARY_PATH:-}"
+# Prefer persistent install, fall back to /tmp build
+if [ ! -x "$LLAMA_SERVER" ] && [ -x "$LLAMA_SERVER_LEGACY" ]; then
+    LLAMA_SERVER="$LLAMA_SERVER_LEGACY"
+    export LD_LIBRARY_PATH="/tmp/llama.cpp/build/bin:/tmp/llama.cpp/build/ggml/src:${LD_LIBRARY_PATH:-}"
+else
+    export LD_LIBRARY_PATH="/opt/llama-server/lib:${LD_LIBRARY_PATH:-}"
+fi
 
 stop_server() {
     pkill -f "llama-server.*gemma" 2>/dev/null && echo "Stopped." || echo "Not running."

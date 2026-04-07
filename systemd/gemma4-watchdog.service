@@ -1,0 +1,14 @@
+[Unit]
+Description=Gemma 4 Demo Health Watchdog
+After=gemma4-server.service
+
+[Service]
+Type=simple
+User=daaronch
+Group=daaronch
+ExecStart=/home/daaronch/demo-gemma-4/watchdog.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

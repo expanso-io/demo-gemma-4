@@ -1,0 +1,21 @@
+[Unit]
+Description=Gemma 4 Demo Web Dashboard
+After=network.target
+# Dashboard can run independently — it just shows historical data if pipeline is down
+
+[Service]
+Type=simple
+User=daaronch
+Group=daaronch
+WorkingDirectory=/home/daaronch/demo-gemma-4
+EnvironmentFile=-/home/daaronch/demo-gemma-4/.env
+
+Environment=PORT=9090
+ExecStart=/usr/bin/python3 web/server.py
+Restart=on-failure
+RestartSec=5
+# Dashboard is low-priority — first to go if OOM
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=multi-user.target

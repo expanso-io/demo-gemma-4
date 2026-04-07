@@ -1,0 +1,423 @@
+#!/usr/bin/env bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# demo-ctl — Manage the Gemma 4 demo stack on Jetson
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Usage:
+#   ./demo-ctl start       Start full stack (server → pipeline → dashboard)
+#   ./demo-ctl stop        Stop everything cleanly
+#   ./demo-ctl restart     Restart everything
+#   ./demo-ctl status      Health check all components + system resources
+#   ./demo-ctl logs [svc]  Tail logs (server|pipeline|dashboard|all)
+#   ./demo-ctl install     Install systemd services (run once)
+#   ./demo-ctl uninstall   Remove systemd services
+#   ./demo-ctl doctor      Diagnose problems
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICES=(gemma4-server gemma4-pipeline gemma4-dashboard gemma4-watchdog)
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# ── Helpers ───────────────────────────────────────────────
+
+ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
+warn() { echo -e "  ${YELLOW}!${NC} $1"; }
+fail() { echo -e "  ${RED}✗${NC} $1"; }
+info() { echo -e "  ${BLUE}·${NC} $1"; }
+
+check_root() {
+    if [ "$EUID" -ne 0 ] && [ "${1:-}" = "needs-root" ]; then
+        echo "This command needs sudo. Re-running..."
+        exec sudo "$0" "$@"
+    fi
+}
+
+# ── Preflight: detect conflicts ───────────────────────────
+
+preflight() {
+    local problems=0
+
+    # Check for competing model servers
+    if pgrep -f "ollama" >/dev/null 2>&1; then
+        fail "Ollama is running — it will compete for GPU memory"
+        info "Stop it: sudo systemctl stop ollama  OR  pkill ollama"
+        problems=$((problems + 1))
+    fi
+
+    # Check for stray llama-server processes (not managed by systemd)
+    local managed_pid=""
+    if systemctl is-active gemma4-server >/dev/null 2>&1; then
+        managed_pid=$(systemctl show gemma4-server --property=MainPID --value 2>/dev/null)
+    fi
+    while IFS= read -r pid; do
+        if [ -n "$pid" ] && [ "$pid" != "$managed_pid" ]; then
+            fail "Stray llama-server running (PID $pid) — not managed by systemd"
+            info "Kill it: kill $pid"
+            problems=$((problems + 1))
+        fi
+    done < <(pgrep -f "llama-server.*gemma" 2>/dev/null || true)
+
+    # Check model files exist
+    if [ ! -f "$HOME/models/gemma4-demo/gemma-4-E2B-it.Q4_K_M.gguf" ]; then
+        fail "GGUF model not found at ~/models/gemma4-demo/"
+        info "Download: rclone copy r2:demo-gemma-4/models/gguf/ ~/models/gemma4-demo/"
+        problems=$((problems + 1))
+    fi
+
+    # Check llama-server binary
+    if [ ! -x /opt/llama-server/llama-server ]; then
+        fail "llama-server not installed at /opt/llama-server/"
+        info "Install from /tmp/llama.cpp/build/bin/ or rebuild"
+        problems=$((problems + 1))
+    fi
+
+    # Check expanso-edge
+    if ! command -v expanso-edge &>/dev/null; then
+        fail "expanso-edge not found"
+        problems=$((problems + 1))
+    fi
+
+    return $problems
+}
+
+# ── Commands ──────────────────────────────────────────────
+
+cmd_install() {
+    echo "Installing systemd services..."
+
+    for svc in "${SERVICES[@]}"; do
+        sudo cp "${SCRIPT_DIR}/systemd/${svc}.service" /etc/systemd/system/
+        ok "Installed ${svc}.service"
+    done
+
+    sudo systemctl daemon-reload
+    ok "Reloaded systemd"
+
+    # Enable on boot
+    for svc in "${SERVICES[@]}"; do
+        sudo systemctl enable "$svc" 2>/dev/null
+        ok "Enabled ${svc} on boot"
+    done
+
+    echo ""
+    ok "Done. Run: ./demo-ctl start"
+}
+
+cmd_uninstall() {
+    echo "Removing systemd services..."
+    cmd_stop 2>/dev/null || true
+
+    for svc in "${SERVICES[@]}"; do
+        sudo systemctl disable "$svc" 2>/dev/null || true
+        sudo rm -f "/etc/systemd/system/${svc}.service"
+        ok "Removed ${svc}"
+    done
+
+    sudo systemctl daemon-reload
+    ok "Uninstalled"
+}
+
+cmd_start() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Starting Gemma 4 Demo Stack"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Preflight
+    if ! preflight; then
+        echo ""
+        fail "Fix the above issues first, or run: ./demo-ctl doctor"
+        exit 1
+    fi
+    ok "Preflight passed"
+    echo ""
+
+    # Start in dependency order
+    echo "Starting inference server..."
+    sudo systemctl start gemma4-server
+    # Wait for health
+    for i in $(seq 1 60); do
+        if curl -sf http://localhost:8081/health >/dev/null 2>&1; then
+            ok "Inference server healthy (took ${i}s)"
+            break
+        fi
+        if [ "$i" -eq 60 ]; then
+            fail "Inference server didn't come up in 60s"
+            info "Check logs: ./demo-ctl logs server"
+            exit 1
+        fi
+        sleep 1
+    done
+
+    echo "Starting pipeline..."
+    sudo systemctl start gemma4-pipeline
+    sleep 2
+    if systemctl is-active gemma4-pipeline >/dev/null 2>&1; then
+        ok "Pipeline running"
+    else
+        fail "Pipeline failed to start"
+        info "Check logs: ./demo-ctl logs pipeline"
+    fi
+
+    echo "Starting dashboard..."
+    sudo systemctl start gemma4-dashboard
+    sleep 1
+    if systemctl is-active gemma4-dashboard >/dev/null 2>&1; then
+        ok "Dashboard running"
+    else
+        warn "Dashboard didn't start (non-critical)"
+    fi
+
+    echo "Starting watchdog..."
+    sudo systemctl start gemma4-watchdog
+    if systemctl is-active gemma4-watchdog >/dev/null 2>&1; then
+        ok "Watchdog running"
+    else
+        warn "Watchdog didn't start (non-critical)"
+    fi
+
+    echo ""
+    cmd_status_brief
+}
+
+cmd_stop() {
+    echo "Stopping demo stack..."
+    # Stop in reverse dependency order
+    for svc in gemma4-watchdog gemma4-dashboard gemma4-pipeline gemma4-server; do
+        if systemctl is-active "$svc" >/dev/null 2>&1; then
+            sudo systemctl stop "$svc"
+            ok "Stopped $svc"
+        else
+            info "$svc already stopped"
+        fi
+    done
+    echo ""
+    show_memory
+}
+
+cmd_restart() {
+    cmd_stop
+    echo ""
+    cmd_start
+}
+
+cmd_status() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Gemma 4 Demo Stack — Status"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Service status
+    for svc in "${SERVICES[@]}"; do
+        local state
+        state=$(systemctl is-active "$svc" 2>/dev/null || echo "inactive")
+        case "$state" in
+            active)   ok "$svc: ${GREEN}running${NC}" ;;
+            inactive) info "$svc: stopped" ;;
+            failed)   fail "$svc: ${RED}failed${NC}" ;;
+            *)        warn "$svc: $state" ;;
+        esac
+    done
+    echo ""
+
+    # Health endpoints
+    echo "  Endpoints:"
+    if curl -sf http://localhost:8081/health >/dev/null 2>&1; then
+        ok "Inference: http://localhost:8081  (healthy)"
+    else
+        fail "Inference: http://localhost:8081  (unreachable)"
+    fi
+    if curl -sf http://localhost:9090/ >/dev/null 2>&1; then
+        ok "Dashboard: http://localhost:9090  (up)"
+    else
+        info "Dashboard: http://localhost:9090  (down)"
+    fi
+    echo ""
+
+    # System resources
+    show_memory
+    show_swap_health
+    show_disk
+}
+
+cmd_status_brief() {
+    for svc in "${SERVICES[@]}"; do
+        local state
+        state=$(systemctl is-active "$svc" 2>/dev/null || echo "inactive")
+        case "$state" in
+            active)   ok "$svc" ;;
+            *)        fail "$svc: $state" ;;
+        esac
+    done
+}
+
+cmd_logs() {
+    local target="${1:-all}"
+    case "$target" in
+        server)   journalctl -u gemma4-server -f --no-hostname ;;
+        pipeline) journalctl -u gemma4-pipeline -f --no-hostname ;;
+        dashboard) journalctl -u gemma4-dashboard -f --no-hostname ;;
+        watchdog) journalctl -u gemma4-watchdog -f --no-hostname ;;
+        all)      journalctl -u gemma4-server -u gemma4-pipeline -u gemma4-dashboard -u gemma4-watchdog -f --no-hostname ;;
+        *)        echo "Usage: $0 logs [server|pipeline|dashboard|all]"; exit 1 ;;
+    esac
+}
+
+cmd_doctor() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Gemma 4 Demo — Doctor"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # System checks
+    echo "System:"
+    show_memory
+    show_swap_health
+    show_disk
+    echo ""
+
+    # Binary checks
+    echo "Binaries:"
+    if [ -x /opt/llama-server/llama-server ]; then
+        ok "llama-server: /opt/llama-server/llama-server"
+    else
+        fail "llama-server not found at /opt/llama-server/"
+    fi
+    if command -v expanso-edge &>/dev/null; then
+        ok "expanso-edge: $(which expanso-edge)"
+    else
+        fail "expanso-edge not in PATH"
+    fi
+    if command -v python3 &>/dev/null; then
+        ok "python3: $(which python3)"
+    else
+        fail "python3 not found"
+    fi
+    echo ""
+
+    # Model checks
+    echo "Models:"
+    local model_dir="$HOME/models/gemma4-demo"
+    if [ -f "$model_dir/gemma-4-E2B-it.Q4_K_M.gguf" ]; then
+        ok "GGUF: $(du -h "$model_dir/gemma-4-E2B-it.Q4_K_M.gguf" | cut -f1)"
+    else
+        fail "GGUF not found at $model_dir/"
+        info "Download: rclone copy r2:demo-gemma-4/models/gguf/ $model_dir/"
+    fi
+    if [ -f "$model_dir/gemma-4-E2B-it.BF16-mmproj.gguf" ]; then
+        ok "mmproj: $(du -h "$model_dir/gemma-4-E2B-it.BF16-mmproj.gguf" | cut -f1)"
+    else
+        fail "mmproj not found at $model_dir/"
+    fi
+    echo ""
+
+    # Service checks
+    echo "Services:"
+    for svc in "${SERVICES[@]}"; do
+        if [ -f "/etc/systemd/system/${svc}.service" ]; then
+            local enabled
+            enabled=$(systemctl is-enabled "$svc" 2>/dev/null || echo "disabled")
+            ok "${svc}: installed ($enabled)"
+        else
+            fail "${svc}: not installed — run: ./demo-ctl install"
+        fi
+    done
+    echo ""
+
+    # Conflict checks
+    echo "Conflicts:"
+    preflight && ok "No conflicts detected" || true
+    echo ""
+
+    # Camera check
+    echo "Camera:"
+    if [ -f "${SCRIPT_DIR}/.env" ] && grep -q "CAMERA_URL" "${SCRIPT_DIR}/.env"; then
+        local cam_url
+        cam_url=$(grep "^CAMERA_URL=" "${SCRIPT_DIR}/.env" | cut -d= -f2 | sed 's|://[^:]*:[^@]*@|://***:***@|')
+        info "Configured: $cam_url"
+    else
+        warn "No CAMERA_URL in .env — will use /dev/video0"
+    fi
+}
+
+# ── Resource display helpers ──────────────────────────────
+
+show_memory() {
+    local total used avail
+    read -r total used avail < <(free -m | awk '/Mem:/ {print $2, $3, $7}')
+    local pct=$((used * 100 / total))
+
+    if [ $pct -lt 70 ]; then
+        ok "RAM: ${used}MB / ${total}MB (${pct}%) — ${avail}MB available"
+    elif [ $pct -lt 90 ]; then
+        warn "RAM: ${used}MB / ${total}MB (${pct}%) — ${avail}MB available"
+    else
+        fail "RAM: ${used}MB / ${total}MB (${pct}%) — ${avail}MB available"
+    fi
+}
+
+show_swap_health() {
+    local swap_total swap_used
+    read -r swap_total swap_used < <(free -m | awk '/Swap:/ {print $2, $3}')
+
+    if [ "$swap_total" -eq 0 ]; then
+        fail "No swap configured — this machine NEEDS swap"
+        return
+    fi
+
+    local pct=$((swap_used * 100 / swap_total))
+    info "Swap: ${swap_used}MB / ${swap_total}MB (${pct}%)"
+
+    # Check for thrashing (swap I/O rate)
+    local si so
+    read -r si so < <(vmstat 1 2 | tail -1 | awk '{print $7, $8}')
+    if [ "$((si + so))" -gt 5000 ]; then
+        fail "Swap thrashing detected (si=${si} so=${so} pages/s) — system under memory pressure"
+    elif [ "$((si + so))" -gt 1000 ]; then
+        warn "Elevated swap I/O (si=${si} so=${so} pages/s)"
+    else
+        ok "Swap I/O: nominal (si=${si} so=${so} pages/s)"
+    fi
+}
+
+show_disk() {
+    local used avail pct
+    read -r used avail pct < <(df -h / | awk 'NR==2 {print $3, $4, $5}')
+    if [ "${pct%\%}" -lt 80 ]; then
+        ok "Disk: ${used} used, ${avail} free (${pct})"
+    else
+        warn "Disk: ${used} used, ${avail} free (${pct})"
+    fi
+}
+
+# ── Main ──────────────────────────────────────────────────
+
+case "${1:-help}" in
+    start)     cmd_start ;;
+    stop)      cmd_stop ;;
+    restart)   cmd_restart ;;
+    status)    cmd_status ;;
+    logs)      cmd_logs "${2:-all}" ;;
+    install)   cmd_install ;;
+    uninstall) cmd_uninstall ;;
+    doctor)    cmd_doctor ;;
+    help|*)
+        echo "Usage: $0 {start|stop|restart|status|logs|install|uninstall|doctor}"
+        echo ""
+        echo "  start       Start full stack (server → pipeline → dashboard)"
+        echo "  stop        Stop everything cleanly"
+        echo "  restart     Stop then start"
+        echo "  status      Health check all components + system resources"
+        echo "  logs [svc]  Tail logs (server|pipeline|dashboard|all)"
+        echo "  install     Install systemd services (run once)"
+        echo "  uninstall   Remove systemd services"
+        echo "  doctor      Full system diagnosis"
+        ;;
+esac

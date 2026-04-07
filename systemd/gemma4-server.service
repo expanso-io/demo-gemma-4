@@ -1,0 +1,46 @@
+[Unit]
+Description=Gemma 4 E2B Inference Server (llama.cpp)
+After=network.target
+# Don't start if another model server is hogging the GPU
+Conflicts=ollama.service
+
+[Service]
+Type=simple
+User=daaronch
+Group=daaronch
+
+Environment=LD_LIBRARY_PATH=/opt/llama-server/lib
+Environment=CUDA_VISIBLE_DEVICES=0
+
+ExecStart=/opt/llama-server/llama-server \
+    --model /home/daaronch/models/gemma4-demo/gemma-4-E2B-it.Q4_K_M.gguf \
+    --mmproj /home/daaronch/models/gemma4-demo/gemma-4-E2B-it.BF16-mmproj.gguf \
+    --host 0.0.0.0 \
+    --port 8081 \
+    --n-gpu-layers 99 \
+    --ctx-size 2048 \
+    --threads 4 \
+    --flash-attn true \
+    --reasoning off \
+    --reasoning-budget 0
+
+ExecStartPost=/bin/bash -c '\
+    for i in $(seq 1 60); do \
+        curl -sf http://localhost:8081/health && exit 0; \
+        sleep 1; \
+    done; \
+    echo "Health check timed out"; exit 1'
+
+Restart=on-failure
+RestartSec=10
+# Give the model 90s to load before systemd considers it hung
+TimeoutStartSec=120
+# OOM killer should take out this service last — the model is the point
+OOMScoreAdjust=-500
+
+# Limit to what this machine can handle
+MemoryMax=6G
+MemorySwapMax=2G
+
+[Install]
+WantedBy=multi-user.target
