@@ -1,0 +1,12 @@
+FROM /home/daaronch/models/gemma4-e2b/gemma-4-E2B-it-Q4_K_M.gguf
+FROM /home/daaronch/models/gemma4-e2b/mmproj-BF16.gguf
+
+TEMPLATE {{ .Prompt }}
+RENDERER gemma4
+PARSER gemma4
+
+PARAMETER num_gpu 99
+PARAMETER num_predict 128
+PARAMETER num_ctx 2048
+PARAMETER temperature 0.1
+PARAMETER stop <turn|>

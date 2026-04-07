@@ -1,4 +1,1 @@
-Describe the mood, atmosphere, and content of this scene. Note dominant colors, key objects, and the overall feeling.
-
-Return ONLY JSON, no other text:
-{"mood": "calm|energetic|tense|playful|neutral", "dominant_colors": ["blue", "white"], "objects": ["desk", "monitor"], "summary": "One sentence scene description"}
+Describe this scene in one sentence, 15 words max.

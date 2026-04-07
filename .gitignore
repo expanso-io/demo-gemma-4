@@ -3,8 +3,11 @@
 .claude/
 .ruff_cache/
 detections/
+recordings/
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
 output/
+.env
+buffer.db

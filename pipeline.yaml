@@ -1,230 +1,292 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Gemma 4 × Expanso Edge — "See, Think, Ship" Vision Pipeline
+# Gemma 4 × Expanso Edge — "Sees, Reads, Thinks" Multi-Modal Demo
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
-# Captures webcam frames, sends them to a local Gemma 4 vision
-# model, transforms the output into structured schematized data,
-# and fans it out to multiple destinations.
+# One frame → four Gemma 4 analyses:
+#   1. DETECT  — object classification (CSV labels)
+#   2. READ    — OCR / text extraction
+#   3. DESCRIBE — scene summary (one sentence)
+#   4. SAFETY  — hazard judgment (safe/alert)
 #
-# Usage:
-#   ./run.sh                      # detect objects (default)
-#   ./run.sh detect_shapes        # detect geometric shapes
-#   ./run.sh read_text            # OCR / handwriting
-#   ./run.sh safety_check         # safety monitoring
-#   ./run.sh describe_scene       # scene description
+# Each analysis runs sequentially against the same captured frame.
+# Total cycle: ~8-10s on Jetson Orin 8GB.
 #
 # Configuration (environment variables):
-#   CAPTURE_INTERVAL  Frame capture interval    (default: 5s)
-#   INFERENCE_URL     Ollama/llama.cpp server   (default: http://localhost:11434)
-#   GEMMA_MODEL       Model name                (default: gemma4-fast)
-#   VISION_PROMPT     The prompt sent to Gemma 4 (loaded from prompts/ by run.sh)
-#   DETECTION_MODE    Label for output records   (default: detect_objects)
+#   CAPTURE_INTERVAL  Frame capture interval    (default: 12s)
+#   INFERENCE_URL     llama.cpp server          (default: http://localhost:8081)
 #   NODE_ID           Edge node identifier       (default: edge-cam-001)
-#   PIPELINE_VERSION  Version tag for output     (default: 1.0.0)
+#   PIPELINE_VERSION  Version tag for output     (default: 2.0.0)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ── Input: Generate a trigger every N seconds ──────────────────
+# ── Input: trigger every N seconds ─────────────────────────────
 input:
   generate:
     mapping: 'root = ""'
-    interval: "${CAPTURE_INTERVAL:5s}"
+    interval: "${CAPTURE_INTERVAL:12s}"
 
-# ── Pipeline: Capture → Infer → Structure ─────────────────────
+# ── Pipeline: Capture → 4× Infer → Structure ──────────────────
 pipeline:
   processors:
 
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 1: Capture a frame from the webcam                 │
-    # │                                                         │
-    # │ The subprocess stays alive between captures — the       │
-    # │ camera opens once, and each trigger produces one frame. │
-    # │ Output: {"image_base64": "/9j/4AAQ..."}                 │
     # └─────────────────────────────────────────────────────────┘
     - subprocess:
         name: python3
         args: ["-u", "capture_frame.py"]
-        max_buffer: 1048576  # 1 MB — enough for 320×240 JPEG base64
+        max_buffer: 1048576
 
     - mapping: |
         root = content().string().parse_json()
 
+    - mapping: |
+        root = if this.exists("image_base64") { this } else { deleted() }
+
     # ┌─────────────────────────────────────────────────────────┐
-    # │ Step 2: Send frame to Gemma 4 for vision inference      │
-    # │                                                         │
-    # │ Uses a branch processor to:                             │
-    # │   1. Build an OpenAI-compatible request (request_map)   │
-    # │   2. POST to the local inference server (http)          │
-    # │   3. Extract the response (result_map)                  │
-    # │                                                         │
-    # │ The model runs locally via Ollama — no cloud needed.    │
+    # │ Step 2a: DETECT — Object classification                 │
+    # │ "What's in the frame?" → CSV labels                     │
     # └─────────────────────────────────────────────────────────┘
     - mutation: |
-        meta inference_start = timestamp_unix_milli()
+        meta detect_start = timestamp_unix_milli()
 
     - branch:
         request_map: |
-          let prompt = env("VISION_PROMPT").or("Detect all objects visible in this image. Return ONLY a JSON array: [{\"label\": \"name\", \"confidence\": 0.0-1.0, \"box_2d\": [y1, x1, y2, x2]}]")
-
           root = {
-            "model": env("GEMMA_MODEL").or("gemma4-fast"),
+            "model": "gemma4",
             "messages": [
               {
                 "role": "user",
                 "content": [
-                  {
-                    "type": "text",
-                    "text": $prompt
-                  },
-                  {
-                    "type": "image_url",
-                    "image_url": {
-                      "url": "data:image/jpeg;base64," + this.image_base64
-                    }
-                  }
+                  {"type": "text", "text": "Which are visible? person, box, bottle, sign. CSV only, no explanation."},
+                  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
                 ]
               }
             ],
-            "temperature": 0.1,
-            "max_tokens": 512,
-            "stream": false
+            "max_tokens": 16,
+            "temperature": 0.1
           }
         processors:
           - http:
-              url: "${INFERENCE_URL:http://localhost:11434}/v1/chat/completions"
+              url: "${INFERENCE_URL:http://localhost:8081}/v1/chat/completions"
               verb: POST
               headers:
                 Content-Type: application/json
               timeout: 30s
               retries: 1
         result_map: |
-          root.inference_response = this.choices.0.message.content
-          root.tokens_used = this.usage
+          root.detect = {
+            "raw": this.choices.index(0).message.content,
+            "ms": timestamp_unix_milli() - metadata("detect_start"),
+            "tokens": this.usage.total_tokens.or(0)
+          }
 
     # ┌─────────────────────────────────────────────────────────┐
-    # │ Step 3: Transform into structured, schematized output   │
-    # │                                                         │
-    # │ THIS IS THE EXPANSO VALUE PROP.                         │
-    # │                                                         │
-    # │ Raw model output goes in. What comes out is:            │
-    # │   • Timestamped, versioned, node-tagged                 │
-    # │   • Derived analytics (counts, flags, labels)           │
-    # │   • Mode-specific conditional fields                    │
-    # │   • SHA-256 integrity hashes                            │
-    # │   • Image data stripped (data minimization)             │
-    # │                                                         │
-    # │ This is the difference between an AI demo               │
-    # │ and a production data pipeline.                         │
+    # │ Step 2b: READ — OCR / text extraction                   │
+    # │ "What does it say?" → comma-separated text strings      │
+    # │ This is what YOLO cannot do.                             │
+    # └─────────────────────────────────────────────────────────┘
+    - mutation: |
+        meta read_start = timestamp_unix_milli()
+
+    - branch:
+        request_map: |
+          root = {
+            "model": "gemma4",
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {"type": "text", "text": "Read all text visible in this image. Return only the text strings, comma-separated. Nothing else."},
+                  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
+                ]
+              }
+            ],
+            "max_tokens": 24,
+            "temperature": 0.1
+          }
+        processors:
+          - http:
+              url: "${INFERENCE_URL:http://localhost:8081}/v1/chat/completions"
+              verb: POST
+              headers:
+                Content-Type: application/json
+              timeout: 30s
+              retries: 1
+        result_map: |
+          root.read_text = {
+            "raw": this.choices.index(0).message.content,
+            "ms": timestamp_unix_milli() - metadata("read_start"),
+            "tokens": this.usage.total_tokens.or(0)
+          }
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 2c: DESCRIBE — Scene understanding                 │
+    # │ "What's happening?" → one-sentence summary              │
+    # │ This is what YOLO cannot do.                             │
+    # └─────────────────────────────────────────────────────────┘
+    - mutation: |
+        meta describe_start = timestamp_unix_milli()
+
+    - branch:
+        request_map: |
+          root = {
+            "model": "gemma4",
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {"type": "text", "text": "Describe this scene in one sentence, 15 words max."},
+                  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
+                ]
+              }
+            ],
+            "max_tokens": 32,
+            "temperature": 0.1
+          }
+        processors:
+          - http:
+              url: "${INFERENCE_URL:http://localhost:8081}/v1/chat/completions"
+              verb: POST
+              headers:
+                Content-Type: application/json
+              timeout: 30s
+              retries: 1
+        result_map: |
+          root.describe = {
+            "raw": this.choices.index(0).message.content,
+            "ms": timestamp_unix_milli() - metadata("describe_start"),
+            "tokens": this.usage.total_tokens.or(0)
+          }
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 2d: SAFETY — Hazard judgment                       │
+    # │ "Is this safe?" → safe / alert with reason              │
+    # │ This is what YOLO cannot do.                             │
+    # └─────────────────────────────────────────────────────────┘
+    - mutation: |
+        meta safety_start = timestamp_unix_milli()
+
+    - branch:
+        request_map: |
+          root = {
+            "model": "gemma4",
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {"type": "text", "text": "Is this scene safe? Reply: safe OR alert: [reason]. Nothing else."},
+                  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
+                ]
+              }
+            ],
+            "max_tokens": 16,
+            "temperature": 0.1
+          }
+        processors:
+          - http:
+              url: "${INFERENCE_URL:http://localhost:8081}/v1/chat/completions"
+              verb: POST
+              headers:
+                Content-Type: application/json
+              timeout: 30s
+              retries: 1
+        result_map: |
+          root.safety = {
+            "raw": this.choices.index(0).message.content,
+            "ms": timestamp_unix_milli() - metadata("safety_start"),
+            "tokens": this.usage.total_tokens.or(0)
+          }
+
+    # ┌─────────────────────────────────────────────────────────┐
+    # │ Step 3: Assemble structured multi-modal output          │
     # └─────────────────────────────────────────────────────────┘
     - mapping: |
-        # ── Parse model response (with graceful error handling) ──
-        let raw = this.inference_response
-        let parsed = $raw.parse_json().catch(null)
-        let mode = env("DETECTION_MODE").or("detect_objects")
+        # Parse detect labels
+        let detect_raw = this.detect.raw.trim()
+        let detect_labels = $detect_raw.re_replace_all("[\\n\\r]", ",").split(",").map_each(l -> l.trim().lowercase()).filter(l -> l.length() > 0)
+
+        # Parse read text
+        let read_raw = this.read_text.raw.trim()
+
+        # Parse describe
+        let describe_raw = this.describe.raw.trim()
+
+        # Parse safety
+        let safety_raw = this.safety.raw.trim()
+        let is_safe = !$safety_raw.lowercase().contains("alert")
 
         # ━━ ENVELOPE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Stable across ALL modes. Downstream systems can always
-        # count on these fields existing.
         root.timestamp = now().ts_format("2006-01-02T15:04:05.000Z07:00")
         root.node_id = env("NODE_ID").or("edge-cam-001")
-        root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
-        root.model = env("GEMMA_MODEL").or("gemma4-fast")
+        root.pipeline_version = env("PIPELINE_VERSION").or("2.0.0")
+        root.model = "gemma4-e2b-q4"
         root.frame_id = uuid_v4()
-        root.mode = $mode
+        root.mode = "multi"
 
-        # ━━ INFERENCE TIMING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        root.processing_ms = timestamp_unix_milli() - metadata("inference_start")
+        # ━━ FOUR ANALYSES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        root.detect = {
+          "labels": $detect_labels,
+          "count": $detect_labels.length(),
+          "ms": this.detect.ms,
+          "tokens": this.detect.tokens
+        }
 
-        # ━━ PAYLOAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Parse model JSON or wrap raw text so downstream never breaks.
-        root.payload = if $parsed != null { $parsed } else { {"raw": $raw} }
+        root.read_text = {
+          "text": $read_raw,
+          "ms": this.read_text.ms,
+          "tokens": this.read_text.tokens
+        }
 
-        # ━━ DERIVED ANALYTICS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Computed BY the pipeline, not by the model.
-        # This is what you can't get from `curl localhost:11434`.
+        root.describe = {
+          "summary": $describe_raw,
+          "ms": this.describe.ms,
+          "tokens": this.describe.tokens
+        }
 
-        # Object/detection count — works for any array-returning mode
-        root.object_count = $raw.parse_json().length().catch(0)
-        root.has_detections = root.object_count > 0
+        root.safety = {
+          "safe": $is_safe,
+          "risk": if $is_safe { 1 } else { 3 },
+          "detail": $safety_raw,
+          "ms": this.safety.ms,
+          "tokens": this.safety.tokens
+        }
 
-        # ━━ MODE-SPECIFIC FIELDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # Bloblang conditionals: different modes produce different
-        # output schemas. Same pipeline, different shapes.
-
-        # detect_objects / detect_shapes → extract just the labels
-        root.labels = if ($mode == "detect_objects" || $mode == "detect_shapes") && $parsed != null {
-          $parsed.map_each(item -> item.label.or(item.shape).or("unknown")).catch([])
-        } else { deleted() }
-
-        # safety_check → promote risk fields + compute alert flag
-        root.risk_level = if $mode == "safety_check" && $parsed != null {
-          $parsed.risk_level.or(0)
-        } else { deleted() }
-
-        root.safe = if $mode == "safety_check" && $parsed != null {
-          $parsed.safe.or(true)
-        } else { deleted() }
-
-        root.alert = if $mode == "safety_check" && $parsed != null {
-          $parsed.risk_level.or(0) > 3
-        } else { deleted() }
-
-        # read_text → promote the extracted text to top level
-        root.extracted_text = if $mode == "read_text" && $parsed != null {
-          $parsed.text.or("")
-        } else { deleted() }
+        # ━━ TOTALS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        root.total_ms = this.detect.ms + this.read_text.ms + this.describe.ms + this.safety.ms
+        root.total_tokens = this.detect.tokens + this.read_text.tokens + this.describe.tokens + this.safety.tokens
 
         # ━━ DATA INTEGRITY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # SHA-256 hashes for both input frame and model output.
-        # Downstream can verify nothing was tampered with.
         root.integrity = {
-          "payload_sha256": $raw.hash("sha256").encode("hex"),
           "frame_sha256": this.image_base64.hash("sha256").encode("hex")
         }
 
-        # ━━ TOKEN USAGE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        root.tokens = this.tokens_used
-
-        # NOTE: image_base64 is deliberately NOT copied to root.
-        # The raw frame never reaches downstream — data minimization.
-
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 4: Makoto L1 Data Provenance Attestation           │
-    # │                                                         │
-    # │ Every detection carries a Makoto attestation proving:   │
-    # │   • Where the data came from (camera + node ID)         │
-    # │   • What transform was applied (model + prompt mode)    │
-    # │   • Who executed it (this Expanso Edge node)            │
-    # │   • Integrity hashes for verification                   │
-    # │                                                         │
-    # │ Spec: https://usemakoto.dev/spec/                       │
-    # │ This is SLSA for data. No other AI demo does this.      │
     # └─────────────────────────────────────────────────────────┘
     - mutation: |
         root.attestation = {
           "_type": "https://in-toto.io/Statement/v1",
           "subject": [{
-            "name": "detection:" + this.frame_id,
+            "name": "multimodal:" + this.frame_id,
             "digest": {
-              "sha256": this.integrity.payload_sha256,
-              "recordCount": "1"
+              "sha256": this.integrity.frame_sha256,
+              "recordCount": "4"
             }
           }],
           "predicateType": "https://makoto.dev/transform/v1",
           "predicate": {
             "inputs": [{
               "name": "webcam-frame:" + this.frame_id,
-              "digest": {
-                "sha256": this.integrity.frame_sha256
-              }
+              "digest": { "sha256": this.integrity.frame_sha256 }
             }],
             "transform": {
               "type": "https://makoto.dev/transforms/vision-inference",
-              "name": this.mode,
+              "name": "multi-modal",
               "version": this.pipeline_version,
               "parameters": {
-                "model": this.model,                "prompt_mode": this.mode,
-                "temperature": 0.1,
-                "max_tokens": 512
+                "model": this.model,
+                "modes": ["detect", "read_text", "describe", "safety"],
+                "temperature": 0.1
               },
               "codeRef": {
                 "uri": "https://github.com/expanso-io/demo-gemma-4",
@@ -237,54 +299,30 @@ pipeline:
             },
             "metadata": {
               "processedOn": this.timestamp,
-              "processingMs": this.processing_ms
+              "processingMs": this.total_ms
             }
           }
         }
 
 # ── Output: Fan out to multiple destinations ───────────────────
-#
-# Same detection → terminal + archive. Add Kafka, S3, PostgreSQL,
-# Datadog, or any of Expanso's 69+ output components in seconds.
-#
 output:
   broker:
     pattern: fan_out
     outputs:
-      # 1. Real-time terminal display
       - stdout:
           codec: lines
 
-      # 2. Structured JSONL archive (one file per day)
       - file:
           path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
           codec: lines
 
-      # 3. Live dashboard (web/server.py on port 9090)
-      - try:
-          - http_client:
+      - drop_on:
+          error: true
+          output:
+            http_client:
               url: "${DASHBOARD_URL:http://localhost:9090}/api/detection"
               verb: POST
               headers:
                 Content-Type: application/json
               retries: 0
-          - drop: {}
-
-      # ── Uncomment to add more destinations ──────────────
-      #
-      # # 4. Forward to any HTTP API (webhook, Slack, PagerDuty)
-      # - http_client:
-      #     url: https://your-api.com/detections
-      #     verb: POST
-      #     headers:
-      #       Content-Type: application/json
-      #
-      # # 4. Stream to Kafka
-      # - kafka:
-      #     addresses: ["localhost:9092"]
-      #     topic: vision-detections
-      #
-      # # 5. Archive to S3
-      # - aws_s3:
-      #     bucket: my-detections-bucket
-      #     path: 'edge/${! env("NODE_ID") }/${! now().ts_format("2006-01-02") }/${! uuid_v4() }.json'
+              max_in_flight: 1

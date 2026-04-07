@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Training Data Capture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-base: #141414; --bg-surface: #1c1c1c; --bg-elevated: #242424;
+      --border: rgba(255,255,255,0.08); --border-active: rgba(255,255,255,0.15);
+      --text-primary: #f1f5f9; --text-secondary: #9f9f9f; --text-dim: rgba(255,255,255,0.4);
+      --violet: #9259ED; --red: #FF4A0E; --red-dim: rgba(255,74,14,0.15);
+      --green: #52CD42; --green-dim: rgba(82,205,66,0.15);
+      --radius: 4px;
+      --font-sans: 'Figtree', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-primary); min-height: 100vh; }
+    .shell { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header a { color: var(--violet); text-decoration: none; font-size: 13px; font-family: var(--font-mono); }
+
+    .camera-feed { background: #000; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16/9; margin-bottom: 24px; position: relative; }
+    .camera-feed img { width: 100%; height: 100%; object-fit: contain; }
+    .rec-badge { position: absolute; top: 12px; left: 12px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: var(--radius); background: var(--red); color: #fff; display: none; }
+    .rec-badge.on { display: block; animation: pulse-rec 1s ease-in-out infinite; }
+    @keyframes pulse-rec { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .status-bar { font-family: var(--font-mono); font-size: 18px; font-weight: 500; text-align: center; padding: 16px; margin-bottom: 24px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .status-bar.recording { border-color: var(--red); color: var(--red); }
+    .status-bar.countdown { color: var(--violet); }
+
+    .buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 24px; }
+    .obj-btn { font-family: var(--font-mono); font-size: 16px; font-weight: 500; padding: 14px 28px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--bg-surface); color: var(--text-primary); cursor: pointer; transition: all 100ms; }
+    .obj-btn:hover { border-color: var(--border-active); background: var(--bg-elevated); }
+    .obj-btn.active { border-color: var(--red); background: var(--red-dim); color: var(--red); }
+    .obj-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .stop-btn { font-family: var(--font-mono); font-size: 18px; font-weight: 600; padding: 14px 40px; border-radius: var(--radius); border: 2px solid var(--red); background: var(--red-dim); color: var(--red); cursor: pointer; display: none; }
+    .stop-btn.visible { display: inline-block; }
+
+    .settings { display: flex; gap: 24px; justify-content: center; margin-bottom: 24px; }
+    .settings label { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+    .settings input { width: 55px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-primary); padding: 6px 8px; font-family: var(--font-mono); font-size: 14px; text-align: center; }
+
+    .stats { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .stat { font-family: var(--font-mono); font-size: 13px; padding: 6px 14px; border-radius: var(--radius); background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-secondary); }
+    .stat .n { color: var(--green); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <h1>Training Data Capture</h1>
+      <a href="/">back to dashboard</a>
+    </header>
+
+    <div class="camera-feed">
+      <img id="camImg" src="/api/snapshot" alt="Camera">
+      <div class="rec-badge" id="recBadge">REC</div>
+    </div>
+
+    <div class="status-bar" id="statusBar">Ready — pick an object to record</div>
+
+    <div class="buttons">
+      <button class="obj-btn" onclick="toggle('box')" id="btn-box">box</button>
+      <button class="obj-btn" onclick="toggle('bottle')" id="btn-bottle">bottle</button>
+      <button class="obj-btn" onclick="toggle('sign')" id="btn-sign">sign</button>
+      <button class="obj-btn" onclick="toggle('person')" id="btn-person">person</button>
+      <button class="obj-btn" onclick="toggle('empty')" id="btn-empty">empty</button>
+      <button class="stop-btn" id="stopBtn" onclick="doStop()">stop</button>
+    </div>
+
+    <div class="settings">
+      <label>Countdown <input type="number" id="cd" value="5" min="0" max="30" onchange="CD=parseInt(this.value)||0"> s</label>
+      <label>Duration <input type="number" id="dur" value="20" min="0" max="120" onchange="DUR=parseInt(this.value)||0"> s (0=manual)</label>
+    </div>
+
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <script>
+    const OBJS = ['box','bottle','sign','person','empty'];
+    let CD = 5, DUR = 20;
+    let current = null, cdTimer = null, autoTimer = null;
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
+
+    function bell(freq, dur, n) {
+      for (let i = 0; i < n; i++) {
+        const t = audio.currentTime + i * (dur + 0.15);
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.8, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + dur);
+        o.connect(g); g.connect(audio.destination);
+        o.start(t); o.stop(t + dur);
+      }
+    }
+
+    function toggle(label) {
+      if (current === label) return doStop();
+      if (cdTimer) { clearInterval(cdTimer); cdTimer = null; ui(); }
+      if (current) doStop();
+      audio.resume();
+      startCountdown(label);
+    }
+
+    function startCountdown(label) {
+      let r = CD;
+      if (r <= 0) return doStart(label);
+      OBJS.forEach(o => document.getElementById('btn-'+o).disabled = o !== label);
+      document.getElementById('btn-'+label).classList.add('active');
+      const bar = document.getElementById('statusBar');
+      bar.className = 'status-bar countdown';
+      bar.textContent = label + ' in ' + r + '...';
+      bell(660, 0.15, 1);
+      cdTimer = setInterval(() => {
+        r--;
+        if (r > 0) { bar.textContent = label + ' in ' + r + '...'; bell(660, 0.15, 1); }
+        else { clearInterval(cdTimer); cdTimer = null; doStart(label); }
+      }, 1000);
+    }
+
+    function doStart(label) {
+      bell(880, 0.4, 3);
+      fetch('/api/recording/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({label}) })
+      .then(r => r.json()).then(d => {
+        if (d.ok) { current = label; ui(); poll(); if (DUR > 0) autoTimer = setTimeout(doStop, DUR * 1000); }
+        else { alert(d.error); OBJS.forEach(o => document.getElementById('btn-'+o).disabled = false); }
+      });
+    }
+
+    function doStop() {
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+      bell(440, 0.6, 2);
+      fetch('/api/recording/stop', {method:'POST'}).then(r => r.json()).then(() => { current = null; ui(); loadStats(); });
+    }
+
+    function ui() {
+      const bar = document.getElementById('statusBar');
+      const badge = document.getElementById('recBadge');
+      const stop = document.getElementById('stopBtn');
+      if (current) {
+        bar.className = 'status-bar recording'; bar.textContent = 'Recording: ' + current;
+        badge.classList.add('on'); stop.classList.add('visible');
+      } else {
+        bar.className = 'status-bar'; bar.textContent = 'Ready — pick an object to record';
+        badge.classList.remove('on'); stop.classList.remove('visible');
+      }
+      OBJS.forEach(o => {
+        const b = document.getElementById('btn-'+o);
+        b.classList.toggle('active', current === o);
+        b.disabled = current ? current !== o : false;
+      });
+    }
+
+    function poll() {
+      if (!current) return;
+      fetch('/api/recording/status').then(r => r.json()).then(d => {
+        if (d.active) {
+          document.getElementById('statusBar').textContent = 'Recording: ' + d.label + ' — ' + d.count + ' frames';
+          setTimeout(poll, 500);
+        }
+      });
+    }
+
+    function loadStats() {
+      fetch('/api/recording/labels').then(r => r.json()).then(labels => {
+        const el = document.getElementById('stats');
+        const entries = Object.entries(labels);
+        el.innerHTML = entries.length ? entries.map(([k,v]) => '<span class="stat">'+k+': <span class="n">'+v+'</span></span>').join('') : '';
+      });
+    }
+
+    function refreshCam() {
+      const img = document.getElementById('camImg');
+      const tmp = new Image();
+      tmp.onload = () => { img.src = tmp.src; };
+      tmp.src = '/api/snapshot?t=' + Date.now();
+    }
+
+    loadStats();
+    setInterval(refreshCam, 250);
+    setInterval(loadStats, 5000);
+  </script>
+</body>
+</html>

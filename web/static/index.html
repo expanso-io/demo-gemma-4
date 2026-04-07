@@ -6,7 +6,7 @@
   <title>Gemma 4 × Expanso Edge</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -22,9 +22,13 @@
       --violet: #9259ED;
       --violet-dim: rgba(146,89,237,0.15);
       --blue: #0055FF;
+      --blue-dim: rgba(0,85,255,0.15);
       --ice: #33CCFF;
+      --ice-dim: rgba(51,204,255,0.15);
       --green: #52CD42;
+      --green-dim: rgba(82,205,66,0.15);
       --red: #FF4A0E;
+      --red-dim: rgba(255,74,14,0.15);
       --orange: #ff9f0a;
       --radius: 4px;
       --font-sans: 'Figtree', system-ui, sans-serif;
@@ -40,13 +44,13 @@
       min-height: 100vh;
     }
 
-    /* ── Layout ─────────────────────────── */
     .shell {
       max-width: 1280px;
       margin: 0 auto;
       padding: 16px;
     }
 
+    /* ── Header ────────────────────────── */
     .header {
       display: flex;
       align-items: center;
@@ -62,31 +66,43 @@
       gap: 12px;
     }
 
-    .header-left h1 {
-      font-size: 20px;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-
-    .header-left h1 span {
-      color: var(--violet);
-    }
-
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: var(--text-dim);
+      flex-shrink: 0;
     }
     .status-dot.active { background: var(--green); }
     .status-dot.error { background: var(--red); }
 
-    .mode-label {
+    .header-left h1 {
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .header-left h1 span { color: var(--violet); }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .gemma-brand {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .gemma-brand strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .cycle-badge {
       font-family: var(--font-mono);
       font-size: 12px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
       color: var(--text-secondary);
       background: var(--bg-elevated);
       padding: 4px 10px;
@@ -94,167 +110,220 @@
       border: 1px solid var(--border);
     }
 
-    .main {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    @media (max-width: 768px) {
-      .main { grid-template-columns: 1fr; }
-    }
-
-    /* ── Cards ──────────────────────────── */
-    .card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .card-title {
-      font-size: 12px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-secondary);
-    }
-
-    .card-body { padding: 16px; }
-    .card-body.flush { padding: 0; }
-
-    /* ── Camera Feed ────────────────────── */
-    .camera-container {
-      position: relative;
-      background: var(--bg-elevated);
-      aspect-ratio: 16/9;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .camera-container img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-
-    .camera-placeholder {
-      color: var(--text-dim);
-      font-size: 14px;
-      text-align: center;
-    }
-
-    .camera-placeholder .icon {
-      font-size: 32px;
-      margin-bottom: 8px;
-      display: block;
-    }
-
-    /* ── Metrics Row ───────────────────── */
+    /* ── Metrics Bar ───────────────────── */
     .metrics {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1px;
       background: var(--border);
-      border-top: 1px solid var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
     }
 
     .metric {
       background: var(--bg-surface);
-      padding: 12px 16px;
+      padding: 10px 16px;
     }
 
     .metric-label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--text-secondary);
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .metric-value {
       font-family: var(--font-mono);
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 500;
       color: var(--text-primary);
     }
 
-    .metric-value.accent { color: var(--violet); }
-    .metric-value.alert { color: var(--red); }
-
-    /* ── JSON Output ───────────────────── */
-    .json-output {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--text-primary);
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 360px;
-      overflow-y: auto;
-      padding: 16px;
+    /* ── Live View ──────────────────────── */
+    .live-view {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 16px;
     }
 
-    .json-output .key { color: var(--ice); }
-    .json-output .string { color: var(--green); }
-    .json-output .number { color: var(--orange); }
-    .json-output .boolean { color: var(--violet); }
-    .json-output .null { color: var(--text-dim); }
-
-    /* ── Detection History ─────────────── */
-    .history {
-      margin-top: 16px;
+    @media (max-width: 900px) {
+      .live-view { grid-template-columns: 1fr; }
     }
 
-    .history-table {
+    .live-camera {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      aspect-ratio: 4/3;
+    }
+
+    .live-camera img {
       width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
     }
 
-    .history-table th {
-      font-size: 12px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-secondary);
-      text-align: left;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .history-table td {
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--border);
+    .live-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: var(--radius);
+      background: var(--red);
+      color: #fff;
+      animation: pulse-rec 1.5s ease-in-out infinite;
     }
 
-    .history-table tr:hover td {
-      background: var(--bg-elevated);
+    .overlay-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
-    .badge {
-      display: inline-block;
+    .overlay-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      transition: border-color 100ms;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .overlay-card.fresh { border-color: var(--border-active); }
+
+    .overlay-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .overlay-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    @media (max-width: 768px) {
+      .metrics { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .mode-tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
       padding: 2px 8px;
       border-radius: var(--radius);
-      font-size: 12px;
-      font-weight: 500;
-      font-family: var(--font-mono);
     }
-    .badge.mode { background: var(--violet-dim); color: var(--violet); }
-    .badge.alert-true { background: rgba(255,74,14,0.15); color: var(--red); }
-    .badge.alert-false { background: rgba(82,205,66,0.15); color: var(--green); }
+    .mode-tag.detect { background: var(--violet-dim); color: var(--violet); }
+    .mode-tag.read { background: var(--ice-dim); color: var(--ice); }
+    .mode-tag.describe { background: var(--blue-dim); color: var(--blue); }
+    .mode-tag.safety-safe { background: var(--green-dim); color: var(--green); }
+    .mode-tag.safety-alert { background: var(--red-dim); color: var(--red); }
+
+    .mode-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .mode-card-body {
+      padding: 16px;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    /* ── DETECT card ───────────────────── */
+    .label-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .label-badge {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: var(--radius);
+      background: var(--violet-dim);
+      color: var(--violet);
+    }
+
+    /* ── READ card ─────────────────────── */
+    .read-text {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 1.6;
+      color: var(--ice);
+    }
+    .read-text .line {
+      display: block;
+      padding: 2px 0;
+    }
+
+    /* ── DESCRIBE card ─────────────────── */
+    .describe-text {
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1.6;
+      color: var(--text-primary);
+    }
+
+    /* ── SAFETY card ───────────────────── */
+    .safety-indicator {
+      text-align: center;
+    }
+
+    .safety-status {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .safety-status.safe { color: var(--green); }
+    .safety-status.alert { color: var(--red); }
+
+    .risk-meter {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+    .risk-segment {
+      width: 40px;
+      height: 8px;
+      border-radius: 2px;
+      background: var(--bg-elevated);
+    }
+    .risk-segment.filled-1 { background: var(--green); }
+    .risk-segment.filled-2 { background: #8cd442; }
+    .risk-segment.filled-3 { background: var(--orange); }
+    .risk-segment.filled-4 { background: #ff6a0e; }
+    .risk-segment.filled-5 { background: var(--red); }
+
+    .safety-detail {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
 
     /* ── Skeleton Loading ──────────────── */
     .skeleton {
@@ -271,13 +340,24 @@
     .skeleton-line.w80 { width: 80%; }
     .skeleton-line.w40 { width: 40%; }
 
-    /* ── Attestation Toggle ─────────────── */
+    .placeholder-text {
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* ── Attestation ───────────────────── */
+    .attestation-bar {
+      margin-top: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
     .attestation-toggle {
       font-size: 13px;
       color: var(--text-secondary);
       cursor: pointer;
-      padding: 8px 16px;
-      border-top: 1px solid var(--border);
+      padding: 10px 16px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -293,15 +373,63 @@
     }
     .attestation-body.open { display: block; }
 
+    .json-output {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 12px 16px;
+    }
+    .json-output .key { color: var(--ice); }
+    .json-output .string { color: var(--green); }
+    .json-output .number { color: var(--orange); }
+    .json-output .boolean { color: var(--violet); }
+    .json-output .null { color: var(--text-dim); }
+
+    /* ── History ────────────────────────── */
+    .history { margin-top: 16px; }
+    .history-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .history-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+    }
+    .history-header span {
+      font-size: 11px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary);
+    }
+    .history-list { max-height: 300px; overflow-y: auto; }
+    .history-row {
+      display: grid; grid-template-columns: 80px 1fr 1fr 80px;
+      gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono); font-size: 12px; align-items: center;
+    }
+    .history-row:hover { background: var(--bg-elevated); }
+    .history-row .time { color: var(--text-dim); }
+    .history-row .labels { color: var(--violet); }
+    .history-row .desc { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-row .ms { color: var(--text-dim); text-align: right; }
+    .history-empty { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
     /* ── Footer ─────────────────────────── */
     .footer {
-      padding: 16px 0;
-      margin-top: 24px;
+      padding: 12px 0;
+      margin-top: 16px;
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
+      align-items: center;
       font-size: 12px;
       color: var(--text-dim);
+      font-family: var(--font-mono);
     }
     .footer a {
       color: var(--violet);
@@ -319,212 +447,260 @@
         <div class="status-dot" id="statusDot"></div>
         <h1>Gemma 4 <span>×</span> Expanso Edge</h1>
       </div>
-      <div class="mode-label" id="modeLabel">waiting</div>
+      <div class="header-right">
+        <span class="gemma-brand">Powered by <strong>Google Gemma 4</strong></span>
+        <span class="cycle-badge" id="cycleBadge">waiting</span>
+      </div>
     </header>
 
-    <!-- Main Grid -->
-    <div class="main">
-
-      <!-- Left: Camera + Metrics -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Camera Feed</span>
-            <span class="card-title" id="nodeId">—</span>
-          </div>
-          <div class="card-body flush">
-            <div class="camera-container" id="cameraContainer">
-              <div class="camera-placeholder" id="cameraPlaceholder">
-                <span class="icon">◎</span>
-                Waiting for camera...
-              </div>
-              <img id="cameraImg" style="display:none" alt="Camera feed">
-            </div>
-          </div>
-          <div class="metrics">
-            <div class="metric">
-              <div class="metric-label">Objects</div>
-              <div class="metric-value" id="metricObjects">—</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Latency</div>
-              <div class="metric-value" id="metricLatency">—</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Tokens</div>
-              <div class="metric-value" id="metricTokens">—</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Model</div>
-              <div class="metric-value" id="metricModel" style="font-size:14px">—</div>
-            </div>
-          </div>
-        </div>
+    <!-- Metrics Bar -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Total Latency</div>
+        <div class="metric-value" id="metricTotal">--</div>
       </div>
+      <div class="metric">
+        <div class="metric-label">Cycle</div>
+        <div class="metric-value" id="metricCycle">--</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Tokens</div>
+        <div class="metric-value" id="metricTokens">--</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Model</div>
+        <div class="metric-value" id="metricModel" style="font-size:13px">--</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Node</div>
+        <div class="metric-value" id="metricNode" style="font-size:13px">--</div>
+      </div>
+    </div>
 
-      <!-- Right: Detection Output -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Latest Detection</span>
-            <span class="card-title" id="detectionTime">—</span>
-          </div>
-          <div class="card-body flush" id="jsonContainer">
-            <!-- Skeleton state -->
-            <div class="json-output" id="jsonSkeleton">
-              <div class="skeleton skeleton-line w80"></div>
-              <div class="skeleton skeleton-line w60"></div>
-              <div class="skeleton skeleton-line w80"></div>
-              <div class="skeleton skeleton-line w40"></div>
-              <div class="skeleton skeleton-line w60"></div>
-              <div class="skeleton skeleton-line w80"></div>
-            </div>
-            <div class="json-output" id="jsonOutput" style="display:none"></div>
-          </div>
-          <!-- Attestation (progressive disclosure) -->
-          <div class="attestation-toggle" id="attestationToggle" style="display:none"
-               onclick="toggleAttestation()">
-            <span class="arrow">▸</span> Makoto L1 Attestation
-          </div>
-          <div class="attestation-body" id="attestationBody">
-            <div class="json-output" id="attestationJson" style="font-size:12px;max-height:200px"></div>
-          </div>
+    <!-- Live View: Camera + Overlay -->
+    <div class="live-view">
+      <div class="live-camera">
+        <img id="liveImg" alt="Live camera feed" src="/api/snapshot">
+        <div class="live-badge">LIVE</div>
+      </div>
+      <div class="overlay-strip">
+        <div class="overlay-card" id="cardDetect">
+          <div class="overlay-header"><span class="mode-tag detect">Detect</span> <span class="mode-meta" id="metaDetect"></span></div>
+          <div class="overlay-body" id="bodyDetect"><span class="placeholder-text">--</span></div>
+        </div>
+        <div class="overlay-card" id="cardRead">
+          <div class="overlay-header"><span class="mode-tag read">Read</span> <span class="mode-meta" id="metaRead"></span></div>
+          <div class="overlay-body" id="bodyRead"><span class="placeholder-text">--</span></div>
+        </div>
+        <div class="overlay-card" id="cardDescribe">
+          <div class="overlay-header"><span class="mode-tag describe">Describe</span> <span class="mode-meta" id="metaDescribe"></span></div>
+          <div class="overlay-body" id="bodyDescribe"><span class="placeholder-text">--</span></div>
+        </div>
+        <div class="overlay-card" id="cardSafety">
+          <div class="overlay-header"><span class="mode-tag safety-safe" id="tagSafety">Safety</span> <span class="mode-meta" id="metaSafety"></span></div>
+          <div class="overlay-body" id="bodySafety"><span class="placeholder-text">--</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Detection History -->
+    <!-- Attestation -->
+    <div class="attestation-bar">
+      <div class="attestation-toggle" id="attestationToggle" onclick="toggleAttestation()">
+        <span class="arrow">▸</span> Makoto L1 Provenance Attestation
+      </div>
+      <div class="attestation-body" id="attestationBody">
+        <div class="json-output" id="attestationJson"></div>
+      </div>
+    </div>
+
+    <!-- History -->
     <div class="history">
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Detection History</span>
-          <span class="card-title" id="historyCount">0 detections</span>
+      <div class="history-card">
+        <div class="history-header">
+          <span>Detection History</span>
+          <span id="historyCount">0 cycles</span>
         </div>
-        <div class="card-body flush">
-          <table class="history-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Mode</th>
-                <th>Objects</th>
-                <th>Labels</th>
-                <th>Latency</th>
-                <th>Alert</th>
-              </tr>
-            </thead>
-            <tbody id="historyBody">
-              <tr><td colspan="6" style="color:var(--text-dim);text-align:center;padding:24px">
-                Waiting for detections...
-              </td></tr>
-            </tbody>
-          </table>
+        <div class="history-list" id="historyList">
+          <div class="history-empty">Waiting for detections...</div>
         </div>
       </div>
     </div>
 
     <!-- Footer -->
     <footer class="footer">
-      <span>Gemma 4 × Expanso Edge — See, Think, Ship</span>
-      <span id="footerMeta">
-        Provenance: <a href="https://usemakoto.dev" target="_blank">Makoto L1</a>
-      </span>
+      <span>Sees, Reads, Thinks — on the edge</span>
+      <span>Provenance: <a href="https://usemakoto.dev" target="_blank">Makoto L1</a></span>
+      <span><a href="https://cloud.expanso.io" target="_blank">cloud.expanso.io</a></span>
     </footer>
-    <div style="padding:4px 0;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);display:flex;justify-content:space-between">
-      <span>Node: <span id="footerNode">—</span></span>
-      <span>Job: <span id="footerJob">j-b8a8fade</span></span>
-      <span>Network: <span id="footerNetwork">2ppqjfwxo9agxi</span></span>
-      <span>Orchestrator: <a href="https://cloud.expanso.io" target="_blank" style="color:var(--text-dim)">cloud.expanso.io</a></span>
-    </div>
 
   </div>
 
   <script>
-    // ── State ──────────────────────────────
-    let detectionCount = 0;
-    let connected = false;
+    let cycleCount = 0;
 
     // ── SSE Connection ─────────────────────
     function connectSSE() {
       const es = new EventSource('/api/stream');
 
       es.onopen = () => {
-        connected = true;
         document.getElementById('statusDot').className = 'status-dot active';
       };
 
       es.onmessage = (e) => {
         try {
-          const data = JSON.parse(e.data);
-          handleDetection(data);
+          const d = JSON.parse(e.data);
+          if (d.mode === 'multi') handleMultiDetection(d);
         } catch (err) {
           console.error('Parse error:', err);
         }
       };
 
       es.onerror = () => {
-        connected = false;
         document.getElementById('statusDot').className = 'status-dot error';
         setTimeout(connectSSE, 3000);
       };
     }
 
-    // ── Handle Detection ───────────────────
-    function handleDetection(d) {
-      detectionCount++;
-
-      // Mode label
-      document.getElementById('modeLabel').textContent = d.mode || '—';
+    // ── Handle Multi-Modal Detection ───────
+    function handleMultiDetection(d) {
+      cycleCount++;
 
       // Metrics
-      document.getElementById('metricObjects').textContent = d.object_count ?? '—';
-      document.getElementById('metricLatency').textContent =
-        d.processing_ms ? d.processing_ms + 'ms' : '—';
-      document.getElementById('metricTokens').textContent =
-        d.tokens?.total_tokens ?? '—';
-      document.getElementById('metricModel').textContent = d.model || '—';
-      document.getElementById('nodeId').textContent = d.node_id || '—';
-      document.getElementById('footerNode').textContent = d.node_id || '—';
+      const totalSec = d.total_ms ? (d.total_ms / 1000).toFixed(1) + 's' : '--';
+      document.getElementById('metricTotal').textContent = totalSec;
+      document.getElementById('metricCycle').textContent = cycleCount;
+      document.getElementById('metricTokens').textContent = d.total_tokens || '--';
+      document.getElementById('metricModel').textContent = d.model || '--';
+      document.getElementById('metricNode').textContent = d.node_id || '--';
+      document.getElementById('cycleBadge').textContent = 'cycle ' + cycleCount;
 
-      // Alert styling
-      const objEl = document.getElementById('metricObjects');
-      if (d.alert === true) {
-        objEl.className = 'metric-value alert';
-      } else if (d.has_detections) {
-        objEl.className = 'metric-value accent';
-      } else {
-        objEl.className = 'metric-value';
+      // DETECT card
+      if (d.detect) {
+        const labels = d.detect.labels || [];
+        const el = document.getElementById('bodyDetect');
+        if (labels.length > 0) {
+          el.innerHTML = '<div class="label-badges">' +
+            labels.map(l => '<span class="label-badge">' + esc(l) + '</span>').join('') +
+            '</div>';
+        } else {
+          el.innerHTML = '<span class="placeholder-text">No objects detected</span>';
+        }
+        document.getElementById('metaDetect').textContent =
+          (d.detect.ms / 1000).toFixed(1) + 's · ' + d.detect.tokens + ' tok';
+        flash('cardDetect');
       }
 
-      // Timestamp
-      if (d.timestamp) {
-        const t = new Date(d.timestamp);
-        document.getElementById('detectionTime').textContent =
-          t.toLocaleTimeString();
+      // READ card
+      if (d.read_text) {
+        const text = d.read_text.text || '';
+        const el = document.getElementById('bodyRead');
+        if (text && text.toLowerCase() !== 'none' && text.trim().length > 0) {
+          const lines = text.split(',').map(t => t.trim()).filter(t => t.length > 0);
+          el.innerHTML = '<div class="read-text">' +
+            lines.map(l => '<span class="line">' + esc(l) + '</span>').join('') +
+            '</div>';
+        } else {
+          el.innerHTML = '<span class="placeholder-text">No text detected</span>';
+        }
+        document.getElementById('metaRead').textContent =
+          (d.read_text.ms / 1000).toFixed(1) + 's · ' + d.read_text.tokens + ' tok';
+        flash('cardRead');
       }
 
-      // JSON output (syntax highlighted, without attestation)
-      const display = { ...d };
-      const attestation = display.attestation;
-      delete display.attestation;
-      delete display.integrity; // Keep UI clean, attestation has it
+      // DESCRIBE card
+      if (d.describe) {
+        const summary = d.describe.summary || '';
+        const el = document.getElementById('bodyDescribe');
+        if (summary.trim().length > 0) {
+          el.innerHTML = '<div class="describe-text">' + esc(summary) + '</div>';
+        } else {
+          el.innerHTML = '<span class="placeholder-text">No description</span>';
+        }
+        document.getElementById('metaDescribe').textContent =
+          (d.describe.ms / 1000).toFixed(1) + 's · ' + d.describe.tokens + ' tok';
+        flash('cardDescribe');
+      }
 
-      document.getElementById('jsonSkeleton').style.display = 'none';
-      const jsonEl = document.getElementById('jsonOutput');
-      jsonEl.style.display = 'block';
-      jsonEl.innerHTML = syntaxHighlight(JSON.stringify(display, null, 2));
+      // SAFETY card
+      if (d.safety) {
+        const safe = d.safety.safe;
+        const risk = d.safety.risk || 1;
+        const detail = d.safety.detail || '';
+        const el = document.getElementById('bodySafety');
+        const tag = document.getElementById('tagSafety');
 
-      // Attestation (progressive disclosure)
-      if (attestation) {
-        document.getElementById('attestationToggle').style.display = 'flex';
+        tag.className = 'mode-tag ' + (safe ? 'safety-safe' : 'safety-alert');
+
+        let riskMeter = '<div class="risk-meter">';
+        for (let i = 1; i <= 5; i++) {
+          riskMeter += '<div class="risk-segment' + (i <= risk ? ' filled-' + i : '') + '"></div>';
+        }
+        riskMeter += '</div>';
+
+        el.innerHTML =
+          '<div class="safety-indicator">' +
+            '<div class="safety-status ' + (safe ? 'safe' : 'alert') + '">' +
+              (safe ? 'SAFE' : 'ALERT') +
+            '</div>' +
+            riskMeter +
+            '<div class="safety-detail">risk: ' + risk + '/5' +
+              ((!safe && detail) ? ' — ' + esc(detail) : '') +
+            '</div>' +
+          '</div>';
+
+        document.getElementById('metaSafety').textContent =
+          (d.safety.ms / 1000).toFixed(1) + 's · ' + d.safety.tokens + ' tok';
+        flash('cardSafety');
+      }
+
+      // Attestation
+      if (d.attestation) {
         document.getElementById('attestationJson').innerHTML =
-          syntaxHighlight(JSON.stringify(attestation, null, 2));
+          syntaxHighlight(JSON.stringify(d.attestation, null, 2));
       }
 
-      // History table
-      addHistoryRow(d);
+      // History
+      addHistory(d);
     }
 
-    // ── Syntax Highlighting ────────────────
+    function addHistory(d) {
+      const list = document.getElementById('historyList');
+      if (cycleCount === 1) list.innerHTML = '';
+
+      const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '--';
+      const labels = (d.detect && d.detect.labels) ? d.detect.labels.join(', ') : '--';
+      const desc = (d.describe && d.describe.summary) ? d.describe.summary : '--';
+      const ms = d.total_ms ? (d.total_ms / 1000).toFixed(1) + 's' : '--';
+
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = '<span class="time">' + time + '</span>' +
+        '<span class="labels">' + esc(labels) + '</span>' +
+        '<span class="desc">' + esc(desc) + '</span>' +
+        '<span class="ms">' + ms + '</span>';
+      list.insertBefore(row, list.firstChild);
+      while (list.children.length > 20) list.removeChild(list.lastChild);
+      document.getElementById('historyCount').textContent = cycleCount + ' cycle' + (cycleCount !== 1 ? 's' : '');
+    }
+
+    // ── Helpers ─────────────────────────────
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function flash(id) {
+      const el = document.getElementById(id);
+      el.classList.add('fresh');
+      setTimeout(() => el.classList.remove('fresh'), 1500);
+    }
+
+    function toggleAttestation() {
+      document.getElementById('attestationToggle').classList.toggle('open');
+      document.getElementById('attestationBody').classList.toggle('open');
+    }
+
     function syntaxHighlight(json) {
       return json.replace(
         /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
@@ -537,76 +713,28 @@
           } else if (/null/.test(match)) {
             cls = 'null';
           }
-          return `<span class="${cls}">${match}</span>`;
+          return '<span class="' + cls + '">' + match + '</span>';
         }
       );
     }
 
-    // ── History Table ──────────────────────
-    function addHistoryRow(d) {
-      const tbody = document.getElementById('historyBody');
-
-      // Remove placeholder
-      if (detectionCount === 1) {
-        tbody.innerHTML = '';
-      }
-
-      const tr = document.createElement('tr');
-
-      const time = d.timestamp ? new Date(d.timestamp).toLocaleTimeString() : '—';
-      const labels = (d.labels || []).join(', ') || '—';
-      const alertBadge = d.alert === true
-        ? '<span class="badge alert-true">ALERT</span>'
-        : d.alert === false
-        ? '<span class="badge alert-false">OK</span>'
-        : '—';
-
-      tr.innerHTML = `
-        <td>${time}</td>
-        <td><span class="badge mode">${d.mode || '—'}</span></td>
-        <td>${d.object_count ?? '—'}</td>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${labels}</td>
-        <td>${d.processing_ms ? d.processing_ms + 'ms' : '—'}</td>
-        <td>${alertBadge}</td>
-      `;
-
-      tbody.insertBefore(tr, tbody.firstChild);
-
-      // Keep max 20 rows
-      while (tbody.children.length > 20) {
-        tbody.removeChild(tbody.lastChild);
-      }
-
-      document.getElementById('historyCount').textContent =
-        detectionCount + ' detection' + (detectionCount !== 1 ? 's' : '');
-    }
-
-    // ── Attestation Toggle ─────────────────
-    function toggleAttestation() {
-      const toggle = document.getElementById('attestationToggle');
-      const body = document.getElementById('attestationBody');
-      toggle.classList.toggle('open');
-      body.classList.toggle('open');
-    }
-
-    // ── Camera Refresh ─────────────────────
-    function refreshCamera() {
-      const img = document.getElementById('cameraImg');
-      const placeholder = document.getElementById('cameraPlaceholder');
-      const url = '/api/snapshot?' + Date.now();
-      fetch(url).then(r => {
-        if (r.ok && r.headers.get('content-type') === 'image/jpeg') {
-          img.src = url;
-          img.style.display = 'block';
-          placeholder.style.display = 'none';
-        }
-      }).catch(() => {});
+    // ── Live Camera Stream ────────────────
+    // Use a new Image() to avoid flicker and detect failures
+    function refreshLive() {
+      const display = document.getElementById('liveImg');
+      const tmp = new Image();
+      tmp.onload = function() {
+        display.src = tmp.src;
+      };
+      tmp.src = '/api/snapshot?t=' + Date.now();
     }
 
     // ── Init ───────────────────────────────
     connectSSE();
-    refreshCamera();
-    setInterval(refreshCamera, 2000);
+    setTimeout(() => {
+      refreshLive();
+      setInterval(refreshLive, 300);
+    }, 1000);
   </script>
 </body>
 </html>

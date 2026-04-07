@@ -1,0 +1,16 @@
+{
+  "total_examples": 1876,
+  "frames": 469,
+  "mode_counts": {
+    "detect": 469,
+    "read_text": 469,
+    "describe": 469,
+    "safety": 469
+  },
+  "response_samples": {
+    "detect": "none",
+    "read_text": "none",
+    "describe": "Empty room with gray walls captured by front door security camera",
+    "safety": "safe"
+  }
+}

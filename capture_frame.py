@@ -47,9 +47,9 @@ except ImportError:
 # Falls back to CAMERA_INDEX (integer) for local USB/CSI cameras.
 CAMERA_URL = os.environ.get("CAMERA_URL", "")
 CAMERA_INDEX = int(os.environ.get("CAMERA_INDEX", "0"))
-CAPTURE_WIDTH = int(os.environ.get("CAPTURE_WIDTH", "640"))
-CAPTURE_HEIGHT = int(os.environ.get("CAPTURE_HEIGHT", "480"))
-JPEG_QUALITY = int(os.environ.get("JPEG_QUALITY", "80"))
+CAPTURE_WIDTH = int(os.environ.get("CAPTURE_WIDTH", "320"))
+CAPTURE_HEIGHT = int(os.environ.get("CAPTURE_HEIGHT", "240"))
+JPEG_QUALITY = int(os.environ.get("JPEG_QUALITY", "70"))
 WARMUP_FRAMES = int(os.environ.get("WARMUP_FRAMES", "5"))
 
 
@@ -77,7 +77,6 @@ def open_camera():
 def main():
     # ── Open camera ────────────────────────────────────────────
     cap, source_label = open_camera()
-    print(json.dumps({"status": f"Camera opened: {source_label}"}), flush=True)
 
     # Warmup: let auto-exposure settle (skip for RTSP — already streaming)
     warmup = 1 if CAMERA_URL else WARMUP_FRAMES
@@ -99,6 +98,9 @@ def main():
         if not ret:
             print(json.dumps({"error": "Failed to capture frame"}), flush=True)
             continue
+
+        # Resize to target dimensions (ensures small images for fast inference)
+        frame = cv2.resize(frame, (CAPTURE_WIDTH, CAPTURE_HEIGHT))
 
         # Encode frame as JPEG → base64
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
