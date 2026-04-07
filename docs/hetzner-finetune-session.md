@@ -5,6 +5,81 @@
 **GPU:** NVIDIA RTX 4000 SFF Ada Generation (20GB VRAM)
 **Full log:** [hetzner-finetune.log](hetzner-finetune.log)
 
+## Architecture Overview
+
+Three machines, one pipeline:
+
+```
+┌─────────────────────┐     ┌──────────────────────┐     ┌──────────────────┐
+│   Jetson Orin Nano   │     │  Hetzner GPU Server   │     │  Cloudflare R2   │
+│  (edge inference)    │     │  hetzner.busted.dev   │     │  (backup)        │
+├─────────────────────┤     ├──────────────────────┤     ├──────────────────┤
+│ • Reolink camera     │     │ • RTX 4000 SFF Ada    │     │ Bucket:          │
+│ • Frame capture      │────▶│ • Fine-tuning runs    │────▶│ demo-gemma-4/    │
+│ • Label w/ Claude    │     │ • GGUF export         │     │  models/gguf/    │
+│ • Inference (Ollama) │◀────│ • Merged safetensors  │     │  checkpoints/    │
+│                      │     │                       │     │  recordings/     │
+│ recordings/ (local)  │     │ ~/gemma4-finetune/    │     │  logs/           │
+│ training_data/       │     │                       │     │                  │
+│ labels/              │     │                       │     │                  │
+└─────────────────────┘     └──────────────────────┘     └──────────────────┘
+         │                                                         │
+         │              ┌──────────────────┐                       │
+         └─────────────▶│  GitHub           │◀──────(docs only)────┘
+                        │  expanso-io/      │
+                        │  demo-gemma-4     │
+                        ├──────────────────┤
+                        │ • Scripts         │
+                        │ • Training JSONL  │
+                        │ • Labels          │
+                        │ • Docs + log      │
+                        │ • Prompts         │
+                        │ • Web dashboard   │
+                        └──────────────────┘
+```
+
+### What lives where
+
+| Artifact | GitHub | Jetson | Hetzner | R2 |
+|---|:---:|:---:|:---:|:---:|
+| Scripts (finetune, label, capture) | ✅ | ✅ | ✅ | — |
+| Training JSONL (1,876 examples) | ✅ | ✅ | ✅ | — |
+| Labels (469 Claude-labeled JSONL) | ✅ | ✅ | — | — |
+| Recorded frames (469 JPGs, 19MB) | — | ✅ | ✅ | ✅ |
+| Training log (62KB) | ✅ | ✅ | ✅ | ✅ |
+| GGUF Q4_K_M (3.2GB) | — | — | ✅ | ✅ |
+| Vision projector mmproj (942MB) | — | — | ✅ | ✅ |
+| LoRA checkpoints (8×195MB) | — | — | ✅ | ✅ |
+| Merged safetensors (9.6GB) | — | — | ✅ | — |
+| Docs (this file) | ✅ | ✅ | — | — |
+
+### Recovery scenarios
+
+**Hetzner goes down:** GGUF, checkpoints, and recordings are in R2. Download and re-deploy.
+```bash
+rclone copy r2:demo-gemma-4/ ./restore/ --progress
+```
+
+**Jetson dies:** Clone repo from GitHub, pull GGUF from R2, deploy.
+```bash
+git clone git@github.com:expanso-io/demo-gemma-4.git
+rclone copy r2:demo-gemma-4/models/gguf/ ~/models/gemma4-demo/
+```
+
+**R2 gone:** Everything still on Hetzner. Re-upload.
+```bash
+ssh hetzner.busted.dev
+rclone copy ~/gemma4-finetune/gemma4-demo-tuned_gguf/ r2:demo-gemma-4/models/gguf/
+```
+
+**Need to retrain from scratch:** All scripts + labeled data are in GitHub. Just need a GPU.
+```bash
+git clone git@github.com:expanso-io/demo-gemma-4.git
+rclone copy r2:demo-gemma-4/recordings/ ./recordings/
+python3 prepare_training_data.py
+python3 finetune_gemma4.py
+```
+
 ## Configuration
 
 | Parameter | Value |
