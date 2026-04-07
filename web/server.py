@@ -107,7 +107,7 @@ def camera_loop():
                 # Save frame if recording (at lower rate)
                 save_recording_frame(frame)
 
-                time.sleep(0.05)  # 20 FPS capture
+                time.sleep(0.5)  # 2 FPS — conserve memory on Jetson
             cap.release()
         except Exception as e:
             print(f"[camera] Error: {e}, retrying in 5s...")
