@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run -s
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["opencv-python"]
+# ///
 """
 Gemma 4 × Expanso Edge — Live Dashboard + Recording Server
 

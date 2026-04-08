@@ -32,8 +32,8 @@ pipeline:
     # │ Step 1: Capture a frame from the webcam                 │
     # └─────────────────────────────────────────────────────────┘
     - subprocess:
-        name: python3
-        args: ["-u", "capture_frame.py"]
+        name: uv
+        args: ["run", "-s", "capture_frame.py"]
         max_buffer: 1048576
 
     - mapping: |

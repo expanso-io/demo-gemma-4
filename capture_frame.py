@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run -s
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["opencv-python"]
+# ///
 """
 Frame Capture for Expanso Edge Pipeline
 ========================================
