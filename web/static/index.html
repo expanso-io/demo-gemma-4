@@ -110,6 +110,45 @@
       border: 1px solid var(--border);
     }
 
+    /* ── Cycle Timer ───────────────────── */
+    .cycle-timer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      margin-bottom: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .cycle-timer .bar-track {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-elevated);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .cycle-timer .bar-fill {
+      height: 100%;
+      background: var(--violet);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 200ms linear;
+    }
+    .cycle-timer .bar-fill.analyzing {
+      background: var(--ice);
+      animation: bar-pulse 0.8s ease-in-out infinite;
+    }
+    @keyframes bar-pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    .cycle-timer .timer-label { min-width: 140px; }
+    .cycle-timer .timer-elapsed { min-width: 50px; text-align: right; color: var(--text-dim); }
+
     /* ── Metrics Bar ───────────────────── */
     .metrics {
       display: grid;
@@ -452,6 +491,13 @@
       </div>
     </header>
 
+    <!-- Cycle Timer -->
+    <div class="cycle-timer">
+      <span class="timer-label" id="timerLabel">Waiting for first detection...</span>
+      <div class="bar-track"><div class="bar-fill" id="timerBar"></div></div>
+      <span class="timer-elapsed" id="timerElapsed"></span>
+    </div>
+
     <!-- Metrics Bar -->
     <div class="metrics">
       <div class="metric">
@@ -536,6 +582,42 @@
 
   <script>
     let cycleCount = 0;
+    let lastDetectionTime = null;
+    let cycleInterval = 5; // seconds — matches CAPTURE_INTERVAL
+    let timerHandle = null;
+
+    // ── Cycle Timer ────────────────────────
+    function updateTimer() {
+      if (!lastDetectionTime) return;
+      const elapsed = (Date.now() - lastDetectionTime) / 1000;
+      const pct = Math.min((elapsed / cycleInterval) * 100, 100);
+      const bar = document.getElementById('timerBar');
+      const label = document.getElementById('timerLabel');
+      const elapsedEl = document.getElementById('timerElapsed');
+
+      bar.style.width = pct + '%';
+      elapsedEl.textContent = elapsed.toFixed(0) + 's';
+
+      if (pct >= 100) {
+        label.textContent = 'Analyzing with Gemma 4...';
+        bar.classList.add('analyzing');
+        bar.style.width = '100%';
+      } else {
+        label.textContent = 'Next analysis in ' + Math.max(0, (cycleInterval - elapsed)).toFixed(0) + 's';
+        bar.classList.remove('analyzing');
+      }
+    }
+
+    function resetTimer() {
+      lastDetectionTime = Date.now();
+      const bar = document.getElementById('timerBar');
+      bar.style.width = '0%';
+      bar.classList.remove('analyzing');
+      document.getElementById('timerLabel').textContent = 'Next analysis in ' + cycleInterval + 's';
+      document.getElementById('timerElapsed').textContent = '0s';
+    }
+
+    setInterval(updateTimer, 200);
 
     // ── SSE Connection ─────────────────────
     function connectSSE() {
@@ -563,6 +645,7 @@
     // ── Handle Multi-Modal Detection ───────
     function handleMultiDetection(d) {
       cycleCount++;
+      resetTimer();
 
       // Metrics
       const totalSec = d.total_ms ? (d.total_ms / 1000).toFixed(1) + 's' : '--';

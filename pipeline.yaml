@@ -22,7 +22,7 @@
 input:
   generate:
     mapping: 'root = ""'
-    interval: "${CAPTURE_INTERVAL:12s}"
+    interval: "${CAPTURE_INTERVAL:5s}"
 
 # ── Pipeline: Capture → 4× Infer → Structure ──────────────────
 pipeline:
