@@ -64,7 +64,7 @@ fi
 
 if ! curl -s --connect-timeout 3 "${INFERENCE_URL}/health" 2>/dev/null | grep -q "ok"; then
     echo "  Inference server not reachable at ${INFERENCE_URL}"
-    echo "   Start llama-server:  ./start-server.sh"
+    echo "   Start llama-server:  ./scripts/start-server.sh"
     echo ""
     echo "   Continuing anyway (will retry on each frame)..."
     echo ""

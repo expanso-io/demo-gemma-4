@@ -80,12 +80,11 @@ def main():
     print("[3/5] Preparing dataset...")
 
     from PIL import Image
-    from datasets import Dataset
 
     training_data = args.training_data
     if not os.path.exists(training_data):
         print(f"  Training data not found: {training_data}")
-        print(f"  Run: python3 prepare_training_data.py")
+        print("  Run: python3 prepare_training_data.py")
         sys.exit(1)
 
     # Load JSONL and build conversation format
@@ -129,7 +128,6 @@ def main():
     # (avoids PIL serialization issues with pyarrow)
     def make_dataset_from_records(records):
         """Create dataset that lazily loads images via the data collator."""
-        from datasets import Dataset as HFDataset, Features, Value, Sequence
         # Store image paths, let the collator handle PIL loading
         rows = []
         for r in records:

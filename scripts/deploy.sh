@@ -12,10 +12,10 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JOB_NAME="${1:-gemma4-vision-demo}"
 
-cd "$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
 
 python3 << 'PYEOF' > /tmp/_deploy_job.yaml
 import yaml, sys

@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICES=(gemma4-server gemma4-pipeline gemma4-dashboard gemma4-watchdog)
 
 RED='\033[0;31m'
@@ -93,7 +93,7 @@ cmd_install() {
     echo "Installing systemd services..."
 
     for svc in "${SERVICES[@]}"; do
-        sudo cp "${SCRIPT_DIR}/systemd/${svc}.service" /etc/systemd/system/
+        sudo cp "${PROJECT_ROOT}/systemd/${svc}.service" /etc/systemd/system/
         ok "Installed ${svc}.service"
     done
 
@@ -101,7 +101,7 @@ cmd_install() {
     echo ""
     echo "Installing SSH OOM protection..."
     sudo mkdir -p /etc/systemd/system/ssh.service.d/
-    sudo cp "${SCRIPT_DIR}/systemd/ssh-oom-protect.conf" \
+    sudo cp "${PROJECT_ROOT}/systemd/ssh-oom-protect.conf" \
         /etc/systemd/system/ssh.service.d/override.conf
     ok "sshd OOMScoreAdjust=-1000 (unkillable)"
 
@@ -119,13 +119,13 @@ cmd_install() {
     else
         ok "earlyoom already installed"
     fi
-    sudo cp "${SCRIPT_DIR}/systemd/earlyoom.service" /etc/systemd/system/
+    sudo cp "${PROJECT_ROOT}/systemd/earlyoom.service" /etc/systemd/system/
     ok "Installed earlyoom.service (kills demo procs at 5% free RAM)"
 
     # ── sysctl memory tuning ─────────────────────────────
     echo ""
     echo "Installing sysctl tuning..."
-    sudo cp "${SCRIPT_DIR}/systemd/99-jetson-memory.conf" /etc/sysctl.d/
+    sudo cp "${PROJECT_ROOT}/systemd/99-jetson-memory.conf" /etc/sysctl.d/
     sudo sysctl --system >/dev/null 2>&1
     ok "vm.min_free_kbytes=262144 (256MB reserved for kernel+SSH)"
 
@@ -408,9 +408,9 @@ cmd_doctor() {
 
     # Camera check
     echo "Camera:"
-    if [ -f "${SCRIPT_DIR}/.env" ] && grep -q "CAMERA_URL" "${SCRIPT_DIR}/.env"; then
+    if [ -f "${PROJECT_ROOT}/.env" ] && grep -q "CAMERA_URL" "${PROJECT_ROOT}/.env"; then
         local cam_url
-        cam_url=$(grep "^CAMERA_URL=" "${SCRIPT_DIR}/.env" | cut -d= -f2 | sed 's|://[^:]*:[^@]*@|://***:***@|')
+        cam_url=$(grep "^CAMERA_URL=" "${PROJECT_ROOT}/.env" | cut -d= -f2 | sed 's|://[^:]*:[^@]*@|://***:***@|')
         info "Configured: $cam_url"
     else
         warn "No CAMERA_URL in .env — will use /dev/video0"

@@ -13,13 +13,13 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EDGE_DIR="${SCRIPT_DIR}/.edge"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EDGE_DIR="${PROJECT_ROOT}/.edge"
 
 # Load .env if present
-if [ -f "${SCRIPT_DIR}/.env" ]; then
+if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a
-    source "${SCRIPT_DIR}/.env"
+    source "${PROJECT_ROOT}/.env"
     set +a
 fi
 

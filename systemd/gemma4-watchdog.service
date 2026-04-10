@@ -6,7 +6,7 @@ After=gemma4-server.service
 Type=simple
 User=daaronch
 Group=daaronch
-ExecStart=/home/daaronch/demo-gemma-4/watchdog.sh
+ExecStart=/home/daaronch/demo-gemma-4/scripts/watchdog.sh
 Restart=always
 RestartSec=30
 

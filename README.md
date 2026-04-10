@@ -37,7 +37,7 @@ cp .env.example .env
 
 ```bash
 # Option A: llama.cpp (Jetson / dedicated GPU)
-./start-server.sh
+./scripts/start-server.sh
 
 # Option B: Ollama (Mac / desktop)
 ollama serve
@@ -123,56 +123,43 @@ The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 
 ```
 demo-gemma-4/
-├── pipeline.yaml            # Expanso Edge pipeline (the star of the show)
-├── capture_frame.py         # Webcam → base64 JSON (subprocess)
-├── run.sh                   # Pipeline launcher
-├── start-server.sh          # llama.cpp server management (start/stop/test)
-├── .env.example             # All configurable environment variables
+├── pipeline.yaml              # Expanso Edge pipeline (the star of the show)
+├── capture_frame.py           # Webcam → base64 JSON (subprocess)
+├── run.sh                     # Pipeline launcher
+├── .env.example               # All configurable environment variables
+├── requirements.txt           # Python dependencies
 │
-├── web/
-│   ├── server.py            # Live dashboard + recording server
+├── web/                       # Live dashboard
+│   ├── server.py              #   Dashboard + recording server
 │   └── static/
-│       ├── index.html       # Dashboard UI
-│       └── record.html      # Training data capture UI
+│       ├── index.html         #   Dashboard UI
+│       └── record.html        #   Training data capture UI
 │
-├── prompts/                 # Prompt templates (used by older single-mode pipeline)
-│   ├── detect_objects.txt
-│   ├── detect_shapes.txt
-│   ├── read_text.txt
-│   ├── safety_check.txt
-│   └── describe_scene.txt
+├── scripts/                   # Operational helpers
+│   ├── start-server.sh        #   llama.cpp server management (start/stop/test)
+│   ├── demo-ctl               #   Stack management CLI (start/stop/status/doctor)
+│   ├── watchdog.sh            #   Health + swap monitoring daemon
+│   ├── deploy.sh              #   Deploy pipeline to Expanso Cloud
+│   ├── mac-demo.sh            #   Mac local development launcher
+│   ├── run-edge.sh            #   Run Expanso Edge agent with local config
+│   ├── setup-jetson.sh        #   One-command Jetson setup (model download + server)
+│   ├── setup-dhcp-mac.sh      #   Camera network setup for IP cameras (Mac)
+│   ├── dhcp-server.py         #   Minimal DHCP server for IP cameras
+│   ├── job.yaml               #   Expanso Cloud job spec
+│   └── Modelfile.fast         #   Ollama model definition
 │
-├── docs/
-│   ├── jetson-ops-guide.md      # Jetson memory management & operations
-│   └── hetzner-finetune-session.md  # Fine-tuning session log & architecture
+├── finetune/                  # Fine-tuning pipeline
+│   ├── finetune_gemma4.py     #   Fine-tuning script (GPU machine)
+│   ├── finetune_gemma4.ipynb  #   Fine-tuning notebook (Colab/Jupyter)
+│   ├── label_frames.py        #   Label recorded frames using Claude CLI
+│   ├── prepare_training_data.py  # Convert labels → training JSONL
+│   ├── labels/                #   Claude-generated labels (JSONL)
+│   └── training_data/         #   Training dataset
 │
-├── systemd/                 # Jetson deployment (systemd services)
-│   ├── gemma4-server.service
-│   ├── gemma4-pipeline.service
-│   ├── gemma4-dashboard.service
-│   ├── gemma4-watchdog.service
-│   ├── earlyoom.service
-│   ├── ssh-oom-protect.conf
-│   └── 99-jetson-memory.conf
-│
-├── demo-ctl                 # Stack management CLI (start/stop/status/doctor)
-├── watchdog.sh              # Health + swap monitoring daemon
-├── setup-jetson.sh          # One-command Jetson setup (model download + server)
-├── mac-demo.sh              # Mac local development launcher
-├── deploy.sh                # Deploy pipeline to Expanso Cloud
-├── run-edge.sh              # Run Expanso Edge agent with local config
-│
-├── finetune_gemma4.py       # Fine-tuning script (GPU machine)
-├── finetune_gemma4.ipynb    # Fine-tuning notebook (Colab/Jupyter)
-├── label_frames.py          # Label recorded frames using Claude CLI
-├── prepare_training_data.py # Convert labels → training JSONL
-├── labels/                  # Claude-generated labels (JSONL)
-├── training_data/           # Training dataset for fine-tuning
-│
-├── Modelfile.fast           # Ollama model definition
-├── job.yaml                 # Expanso Cloud job spec
-├── dhcp-server.py           # Minimal DHCP server for IP cameras (Mac)
-└── setup-dhcp-mac.sh        # Camera network setup (Mac)
+├── prompts/                   # Prompt templates
+├── systemd/                   # Jetson systemd services + OOM protection
+├── docs/                      # Operational guides
+└── tests/                     # Test suite (112 tests)
 ```
 
 ## Configuration
@@ -198,17 +185,17 @@ All settings via environment variables (see [`.env.example`](.env.example)):
 
 ```bash
 # One-time setup: downloads model, pulls container, starts server
-./setup-jetson.sh
+./scripts/setup-jetson.sh
 
 # Install systemd services for auto-start on boot
-./demo-ctl install
+./scripts/demo-ctl install
 
 # Daily operations
-./demo-ctl start      # Start full stack (server → pipeline → dashboard → watchdog)
-./demo-ctl stop       # Stop everything cleanly
-./demo-ctl status     # Health check + memory + swap + disk
-./demo-ctl doctor     # Full system diagnosis
-./demo-ctl logs       # Tail all service logs
+./scripts/demo-ctl start      # Start full stack (server → pipeline → dashboard → watchdog)
+./scripts/demo-ctl stop       # Stop everything cleanly
+./scripts/demo-ctl status     # Health check + memory + swap + disk
+./scripts/demo-ctl doctor     # Full system diagnosis
+./scripts/demo-ctl logs       # Tail all service logs
 ```
 
 See [`docs/jetson-ops-guide.md`](docs/jetson-ops-guide.md) for memory management, OOM protection, and monitoring on the 7.4GB Orin.
@@ -217,27 +204,26 @@ See [`docs/jetson-ops-guide.md`](docs/jetson-ops-guide.md) for memory management
 
 ```bash
 # Start inference server + dashboard
-./mac-demo.sh start
+./scripts/mac-demo.sh start
 
 # Deploy pipeline via Expanso Cloud
-./deploy.sh
+./scripts/deploy.sh
 
 # Or run the edge agent locally
-./run-edge.sh
+./scripts/run-edge.sh
 ```
 
 ### Expanso Cloud (fleet deployment)
 
 ```bash
-# Deploy pipeline to all matching nodes
-./deploy.sh
+./scripts/deploy.sh
 ```
 
-The pipeline runs on any node with the `host=mac` label. Edit `job.yaml` to change constraints.
+The pipeline runs on any node with the `host=mac` label. Edit [`scripts/job.yaml`](scripts/job.yaml) to change constraints.
 
 ## Fine-Tuning
 
-The repo includes a complete fine-tuning pipeline to train Gemma 4 on your own data:
+The repo includes a complete fine-tuning pipeline in [`finetune/`](finetune/) to train Gemma 4 on your own data:
 
 ### 1. Record training frames
 
@@ -246,6 +232,7 @@ Use the dashboard's recording UI at `http://localhost:9090/record` to capture fr
 ### 2. Label frames with Claude
 
 ```bash
+cd finetune
 python3 label_frames.py                    # Label all categories
 python3 label_frames.py --category box     # One category
 python3 label_frames.py --sample 30        # Sample N per category
@@ -277,8 +264,7 @@ Requires a GPU with 16GB+ VRAM (Colab T4 works). Uses [Unsloth](https://github.c
 
 ```bash
 scp gemma4-demo-tuned/*.gguf jetson:~/models/gemma4-demo/
-# Restart the inference server
-./demo-ctl restart
+./scripts/demo-ctl restart
 ```
 
 See [`docs/hetzner-finetune-session.md`](docs/hetzner-finetune-session.md) for a complete fine-tuning session log with architecture, hyperparameters, and results.

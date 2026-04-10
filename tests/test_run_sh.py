@@ -102,14 +102,14 @@ class TestShellScriptSyntax:
 
     SHELL_SCRIPTS = [
         "run.sh",
-        "start-server.sh",
-        "watchdog.sh",
-        "demo-ctl",
-        "deploy.sh",
-        "setup-jetson.sh",
-        "mac-demo.sh",
-        "run-edge.sh",
-        "setup-dhcp-mac.sh",
+        "scripts/start-server.sh",
+        "scripts/watchdog.sh",
+        "scripts/demo-ctl",
+        "scripts/deploy.sh",
+        "scripts/setup-jetson.sh",
+        "scripts/mac-demo.sh",
+        "scripts/run-edge.sh",
+        "scripts/setup-dhcp-mac.sh",
     ]
 
     @pytest.mark.parametrize("script", SHELL_SCRIPTS)

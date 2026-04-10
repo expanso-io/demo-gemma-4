@@ -18,7 +18,6 @@ import argparse
 import json
 import glob
 import os
-import sys
 from pathlib import Path
 
 LABELS_DIR = Path(__file__).parent / "labels"
@@ -153,7 +152,7 @@ def main():
     with open(output_dir / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"\n=== Response samples ===")
+    print("\n=== Response samples ===")
     for mode, sample in response_samples.items():
         print(f"  {mode}: \"{sample}\"")
 

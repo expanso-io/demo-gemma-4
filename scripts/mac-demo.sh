@@ -14,12 +14,12 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Load .env so dashboard + server get CAMERA_URL etc.
-if [ -f "${SCRIPT_DIR}/.env" ]; then
+if [ -f "${PROJECT_ROOT}/.env" ]; then
     set -a
-    source "${SCRIPT_DIR}/.env"
+    source "${PROJECT_ROOT}/.env"
     set +a
 fi
 
@@ -44,7 +44,7 @@ cmd_start() {
     echo ""
 
     # ── Inference server (via start-server.sh) ────────────
-    "${SCRIPT_DIR}/start-server.sh" start
+    "${PROJECT_ROOT}/scripts/start-server.sh" start
     echo ""
 
     # ── Dashboard ─────────────────────────────────────────
@@ -55,7 +55,7 @@ cmd_start() {
         sleep 1
 
         echo "  Starting dashboard..."
-        uv run "${SCRIPT_DIR}/web/server.py" \
+        uv run "${PROJECT_ROOT}/web/server.py" \
             > "$DASHBOARD_LOG" 2>&1 &
 
         for i in $(seq 1 15); do
@@ -91,7 +91,7 @@ cmd_stop() {
         ok "Dashboard not running"
     fi
 
-    "${SCRIPT_DIR}/start-server.sh" stop
+    "${PROJECT_ROOT}/scripts/start-server.sh" stop
 
     # Clean up shared frame
     rm -f /tmp/gemma4-latest.jpg
