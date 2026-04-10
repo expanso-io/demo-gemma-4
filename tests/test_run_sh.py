@@ -2,8 +2,8 @@
 """
 Unit tests for run.sh
 
-Tests the launcher script's mode selection, prompt loading,
-environment variable setup, and preflight checks.
+Tests the multi-modal launcher script's environment variable setup,
+preflight checks, and banner output.
 """
 
 import os
@@ -31,100 +31,6 @@ class TestRunShSyntax:
         assert os.access(RUN_SCRIPT, os.X_OK), "run.sh is not executable"
 
 
-class TestModeSelection:
-    """Test prompt file loading and mode validation."""
-
-    VALID_MODES = ["detect_objects", "detect_shapes", "read_text", "safety_check", "describe_scene"]
-
-    @pytest.mark.parametrize("mode", VALID_MODES)
-    def test_prompt_file_exists(self, mode):
-        """Each mode should have a corresponding prompt file."""
-        prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{mode}.txt")
-        assert os.path.isfile(prompt_file), f"Missing prompt file: prompts/{mode}.txt"
-
-    @pytest.mark.parametrize("mode", VALID_MODES)
-    def test_prompt_file_not_empty(self, mode):
-        """Prompt files should not be empty."""
-        prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{mode}.txt")
-        with open(prompt_file) as f:
-            content = f.read().strip()
-        assert len(content) > 10, f"Prompt file prompts/{mode}.txt is too short"
-
-    @pytest.mark.parametrize("mode", VALID_MODES)
-    def test_prompt_requests_json_output(self, mode):
-        """Each prompt should instruct the model to return JSON."""
-        prompt_file = os.path.join(SCRIPT_DIR, "prompts", f"{mode}.txt")
-        with open(prompt_file) as f:
-            content = f.read().lower()
-        assert "json" in content, f"Prompt {mode} doesn't mention JSON output format"
-
-    def test_invalid_mode_fails(self):
-        """Running with an unknown mode should show available modes."""
-        result = subprocess.run(
-            ["bash", "-c", f'source "{RUN_SCRIPT}" nonexistent_mode 2>&1 || true'],
-            capture_output=True, text=True,
-            env={**os.environ, "SKIP_PREFLIGHT": "1"},
-            cwd=SCRIPT_DIR,
-        )
-        # The script should mention the mode is unknown
-        # Since it uses exec at the end, we test the prompt file check directly
-        prompt_file = os.path.join(SCRIPT_DIR, "prompts", "nonexistent_mode.txt")
-        assert not os.path.isfile(prompt_file)
-
-    def test_default_mode_is_detect_objects(self):
-        """Default mode (no argument) should be detect_objects."""
-        # Verify by checking the script source
-        with open(RUN_SCRIPT) as f:
-            content = f.read()
-        assert 'MODE="${1:-detect_objects}"' in content
-
-
-class TestPromptSchemas:
-    """Validate that prompt files define the expected output schemas."""
-
-    def test_detect_objects_expects_array(self):
-        """detect_objects prompt should request a JSON array with label/confidence/box_2d."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "detect_objects.txt")) as f:
-            content = f.read()
-        assert "label" in content
-        assert "confidence" in content
-        assert "box_2d" in content
-
-    def test_detect_shapes_expects_array(self):
-        """detect_shapes prompt should request a JSON array with shape/color."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "detect_shapes.txt")) as f:
-            content = f.read()
-        assert "shape" in content
-        assert "color" in content
-
-    def test_read_text_expects_object(self):
-        """read_text prompt should request a JSON object with text field."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "read_text.txt")) as f:
-            content = f.read()
-        assert '"text"' in content
-
-    def test_safety_check_expects_risk_level(self):
-        """safety_check prompt should request risk_level (used by pipeline alert)."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "safety_check.txt")) as f:
-            content = f.read()
-        assert "risk_level" in content
-        assert "safe" in content
-        assert "concerns" in content
-
-    def test_safety_check_documents_alert_trigger(self):
-        """safety_check prompt should tell model about risk_level > 3 alert."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "safety_check.txt")) as f:
-            content = f.read()
-        assert "risk_level > 3" in content or "risk_level &gt; 3" in content
-
-    def test_describe_scene_expects_object(self):
-        """describe_scene prompt should request a JSON object with mood/objects."""
-        with open(os.path.join(SCRIPT_DIR, "prompts", "describe_scene.txt")) as f:
-            content = f.read()
-        assert "mood" in content
-        assert "objects" in content
-
-
 class TestEnvironmentDefaults:
     """Verify default environment variable values in run.sh."""
 
@@ -137,19 +43,89 @@ class TestEnvironmentDefaults:
         assert "edge-cam-001" in script_content
 
     def test_default_inference_url(self, script_content):
-        assert "http://localhost:11434" in script_content
-
-    def test_default_model(self, script_content):
-        assert "gemma4-e4b-it" in script_content
+        assert "http://localhost:8081" in script_content
 
     def test_default_capture_interval(self, script_content):
-        assert "3s" in script_content
+        assert "CAPTURE_INTERVAL" in script_content
 
     def test_default_pipeline_version(self, script_content):
-        assert "1.0.0" in script_content
+        assert "2.0.0" in script_content
 
-    def test_exports_vision_prompt(self, script_content):
-        assert "export VISION_PROMPT" in script_content
+    def test_sets_camera_url(self, script_content):
+        assert "CAMERA_URL" in script_content
 
-    def test_exports_detection_mode(self, script_content):
-        assert "export DETECTION_MODE" in script_content
+    def test_sets_camera_index(self, script_content):
+        assert "CAMERA_INDEX" in script_content
+
+
+class TestPreflightChecks:
+    """Verify run.sh checks for required tools."""
+
+    @pytest.fixture
+    def script_content(self):
+        with open(RUN_SCRIPT) as f:
+            return f.read()
+
+    def test_checks_expanso_edge(self, script_content):
+        assert "expanso-edge" in script_content
+
+    def test_checks_opencv(self, script_content):
+        assert "cv2" in script_content
+
+    def test_checks_inference_health(self, script_content):
+        assert "health" in script_content
+
+
+class TestBannerOutput:
+    """Verify the banner shows useful info."""
+
+    @pytest.fixture
+    def script_content(self):
+        with open(RUN_SCRIPT) as f:
+            return f.read()
+
+    def test_shows_multi_modal_info(self, script_content):
+        assert "Multi-Modal" in script_content or "multi" in script_content.lower()
+
+    def test_mentions_four_modes(self, script_content):
+        assert "DETECT" in script_content
+        assert "READ" in script_content or "read" in script_content
+        assert "DESCRIBE" in script_content or "describe" in script_content
+        assert "SAFETY" in script_content
+
+    def test_runs_pipeline_yaml(self, script_content):
+        assert "pipeline.yaml" in script_content
+
+
+class TestShellScriptSyntax:
+    """Validate syntax of all shell scripts in the repo."""
+
+    SHELL_SCRIPTS = [
+        "run.sh",
+        "start-server.sh",
+        "watchdog.sh",
+        "demo-ctl",
+        "deploy.sh",
+        "setup-jetson.sh",
+        "mac-demo.sh",
+        "run-edge.sh",
+        "setup-dhcp-mac.sh",
+    ]
+
+    @pytest.mark.parametrize("script", SHELL_SCRIPTS)
+    def test_shell_script_syntax(self, script):
+        script_path = os.path.join(SCRIPT_DIR, script)
+        if not os.path.exists(script_path):
+            pytest.skip(f"{script} not found")
+        result = subprocess.run(
+            ["bash", "-n", script_path],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, f"Syntax error in {script}: {result.stderr}"
+
+    @pytest.mark.parametrize("script", SHELL_SCRIPTS)
+    def test_shell_script_is_executable(self, script):
+        script_path = os.path.join(SCRIPT_DIR, script)
+        if not os.path.exists(script_path):
+            pytest.skip(f"{script} not found")
+        assert os.access(script_path, os.X_OK), f"{script} is not executable"

@@ -1,195 +1,291 @@
-# Gemma 4 × Expanso Edge — "See, Think, Ship"
+# Gemma 4 × Expanso Edge — Multi-Modal Vision at the Edge
 
-Turn any webcam into a structured data source at the edge. Gemma 4 **sees**, Expanso Edge **ships** — timestamped, versioned, schematized JSON to any destination.
+Turn any webcam into a structured data source. One frame, four analyses — object detection, OCR, scene description, and safety judgment — all running on a $200 Jetson at the edge.
 
 ```
 ┌─────────┐    ┌──────────────────────────────────────────┐    ┌─────────────┐
-│  USB     │    │          Expanso Edge Pipeline            │    │  Structured │
-│  Webcam  │───▶│                                          │───▶│  Data Out   │
-└─────────┘    │  capture_frame.py ──▶ Gemma 4 server     │    │             │
-               │       (OpenCV)       (Ollama/llama.cpp)   │    │  • stdout   │
-               │                           │               │    │  • JSONL    │
-               │                    ┌──────▼──────┐        │    │  • HTTP     │
-               │                    │  Bloblang    │        │    │  • Kafka    │
-               │                    │  Schema Map  │        │    │  • S3      │
-               │                    └──────┬──────┘        │    │  • 69+     │
-               │                    ┌──────▼──────┐        │    └─────────────┘
-               │                    │  Fan-Out    │        │
-               │                    │  Broker     │        │
-               │                    └─────────────┘        │
-               └──────────────────────────────────────────┘
+│  USB /   │    │          Expanso Edge Pipeline            │    │  Structured │
+│  RTSP    │───▶│                                          │───▶│  Data Out   │
+│  Camera  │    │  capture → Gemma 4 × 4 → schema → attest│    │             │
+└─────────┘    │                                          │    │  • stdout   │
+               │  1. DETECT  — object classification       │    │  • JSONL    │
+               │  2. READ    — OCR / text extraction       │    │  • HTTP     │
+               │  3. DESCRIBE — scene summary              │    │  • Kafka    │
+               │  4. SAFETY  — hazard judgment             │    │  • S3       │
+               │                                          │    │  • 69+      │
+               └──────────────────────────────────────────┘    └─────────────┘
 ```
 
 ## Quick Start
 
-### 1. Prerequisites
+### Prerequisites
+
+- **[Expanso Edge](https://docs.expanso.io/getting-started/quickstart/)** — the pipeline runtime
+- **Python 3.10+** with OpenCV (`pip install opencv-python`)
+- **A Gemma 4 inference server** — either:
+  - [llama.cpp](https://github.com/ggerganov/llama.cpp) with GGUF (recommended for Jetson)
+  - [Ollama](https://ollama.ai) with `ollama pull gemma3`
+
+### 1. Configure
 
 ```bash
-# Install Expanso Edge
-# https://docs.expanso.io/getting-started/quickstart/
+cp .env.example .env
+# Edit .env — set CAMERA_URL for IP cameras, or leave defaults for USB webcam
+```
 
-# Install Python dependencies
-pip install -r requirements.txt
+### 2. Start the inference server
 
-# Install and start Ollama
-# https://ollama.ai
+```bash
+# Option A: llama.cpp (Jetson / dedicated GPU)
+./start-server.sh
+
+# Option B: Ollama (Mac / desktop)
 ollama serve
 ```
 
-### 2. Pull Gemma 4
+### 3. Run the pipeline
 
 ```bash
-ollama pull gemma4-e4b-it
+./run.sh
 ```
 
-### 3. Run
-
-```bash
-chmod +x run.sh
-./run.sh                    # default: object detection
-```
-
-You should see structured JSON flowing in your terminal:
+Structured JSON flows to your terminal — one envelope per frame with all four analyses:
 
 ```json
 {
-  "timestamp": "2026-04-03T14:23:01.482-04:00",
+  "timestamp": "2026-04-07T14:23:01.482-04:00",
   "node_id": "edge-cam-001",
-  "pipeline_version": "1.0.0",
-  "model": "gemma4-e4b-it",
-  "frame_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "mode": "detect_objects",
-  "processing_ms": 1847,
-  "payload": [
-    {"label": "coffee mug", "confidence": 0.94, "box_2d": [120, 45, 280, 310]},
-    {"label": "keyboard", "confidence": 0.91, "box_2d": [50, 200, 400, 500]}
-  ],
-  "object_count": 2,
-  "has_detections": true,
-  "labels": ["coffee mug", "keyboard"],
-  "integrity": {
-    "payload_sha256": "e3b0c44298fc1c14...",
-    "frame_sha256": "a7ffc6f8bf1ed766..."
+  "pipeline_version": "2.0.0",
+  "model": "gemma4-e2b-q4",
+  "frame_id": "a1b2c3d4-...",
+  "mode": "multi",
+  "detect": {
+    "labels": ["person", "bottle"],
+    "count": 2,
+    "ms": 1847,
+    "tokens": 42
   },
-  "attestation": {
-    "_type": "https://in-toto.io/Statement/v1",
-    "subject": [{"name": "detection:a1b2c3d4-...", "digest": {"sha256": "e3b0c44..."}}],
-    "predicateType": "https://makoto.dev/transform/v1",
-    "predicate": {
-      "inputs": [{"name": "webcam-frame:a1b2c3d4-...", "digest": {"sha256": "a7ffc6f..."}}],
-      "transform": {"type": "vision-inference", "name": "detect_objects", "version": "1.0.0"},
-      "executor": {"id": "expanso-edge://edge-cam-001", "platform": "expanso-edge"}
-    }
-  }
+  "read_text": {
+    "text": "Dasani, Purified Water",
+    "ms": 1203,
+    "tokens": 38
+  },
+  "describe": {
+    "summary": "A person holds a water bottle at a desk",
+    "ms": 982,
+    "tokens": 35
+  },
+  "safety": {
+    "safe": true,
+    "risk": 1,
+    "detail": "safe",
+    "ms": 641,
+    "tokens": 28
+  },
+  "total_ms": 4673,
+  "total_tokens": 143,
+  "integrity": { "frame_sha256": "a7ffc6f8..." },
+  "attestation": { "_type": "https://in-toto.io/Statement/v1", "..." : "..." }
 }
 ```
 
-Every detection carries its own **[Makoto](https://usemakoto.dev) data provenance attestation** — SLSA for data. The attestation proves where the frame came from, what model processed it, which edge node executed it, and includes SHA-256 integrity hashes for verification.
+Every detection carries a **[Makoto](https://usemakoto.dev) data provenance attestation** — proving where the frame came from, what model processed it, and which edge node ran it.
 
-## Switch Modes — Hot-Swap the Brain
-
-The same pipeline, same camera, same model — different behavior:
+### 4. Open the dashboard
 
 ```bash
-./run.sh detect_objects     # What's in the frame?
-./run.sh detect_shapes      # Geometric shape detection
-./run.sh read_text          # OCR / handwriting recognition
-./run.sh safety_check       # Safety hazard monitoring
-./run.sh describe_scene     # Mood and atmosphere analysis
+uv run web/server.py
+# → http://localhost:9090
 ```
 
-Each mode loads a different prompt from `prompts/` and produces a different output schema — all through the same Expanso pipeline.
-
-**Create your own mode** — just add a prompt file:
-
-```bash
-echo 'Count the people in this image. Return ONLY JSON:
-{"count": 0, "positions": ["left", "center"]}' > prompts/count_people.txt
-
-./run.sh count_people
-```
+The dashboard shows live camera feed, real-time Gemma 4 analysis, and detection history. It also supports **recording frames by label** for fine-tuning dataset creation.
 
 ## How It Works
 
 The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 
-| Stage | Component | What It Does |
-|-------|-----------|-------------|
-| **Input** | `generate` | Fires a trigger every 3 seconds |
-| **Capture** | `subprocess` → `capture_frame.py` | Grabs a webcam frame, outputs base64 JPEG |
-| **Infer** | `branch` → `http` | Sends frame + prompt to Gemma 4 (OpenAI-compatible API) |
-| **Schema** | `mapping` (Bloblang) | Transforms raw output into structured envelope with derived analytics, mode-specific fields, integrity hashes, and data minimization (strips raw image) |
-| **Attest** | `mutation` (Bloblang) | Generates a [Makoto L1](https://usemakoto.dev/spec/) data provenance attestation (in-toto format) |
-| **Output** | `broker` (fan_out) | Same data → terminal + JSONL file (+ Kafka, S3, HTTP...) |
+| Stage | What Happens |
+|-------|-------------|
+| **Trigger** | `generate` fires every 5 seconds (configurable via `CAPTURE_INTERVAL`) |
+| **Capture** | `subprocess` runs `capture_frame.py` — grabs a frame, outputs base64 JPEG |
+| **4× Infer** | Four sequential `branch` processors send the same frame to Gemma 4 with different prompts: detect, read, describe, safety |
+| **Schema** | Bloblang `mapping` assembles a structured envelope with derived analytics, per-mode fields, and timing |
+| **Attest** | Bloblang `mutation` generates a [Makoto L1](https://usemakoto.dev/spec/) data provenance attestation |
+| **Output** | `broker` fans out to stdout + JSONL file + dashboard HTTP endpoint |
 
-### The Expanso Difference
+### Why Expanso Edge?
 
-**Without Expanso:** You get raw model text. You write glue code. You manage one server.
+**Without Expanso:** You write glue code for one model on one server with one output.
 
-**With Expanso:** You get timestamped, versioned, node-tagged structured data — with derived analytics, conditional fields per mode, SHA-256 integrity hashes, and Makoto provenance attestations. You add destinations in 3 lines. You deploy to a fleet from a dashboard.
-
-```yaml
-# This Bloblang mapping is the difference between a demo and production:
-root.timestamp = now().ts_format("2006-01-02T15:04:05.000Z07:00")
-root.node_id = env("NODE_ID").or("edge-cam-001")
-root.pipeline_version = env("PIPELINE_VERSION").or("1.0.0")
-root.model = env("GEMMA_MODEL").or("gemma4-e4b-it")
-root.frame_id = uuid_v4()
-root.mode = $mode
-root.processing_ms = timestamp_unix_milli() - metadata("inference_start")
-root.payload = if $parsed != null { $parsed } else { {"raw": $raw} }
-
-# Derived analytics — computed by the pipeline, not the model:
-root.object_count = $raw.parse_json().length().catch(0)
-root.has_detections = root.object_count > 0
-root.labels = if $mode == "detect_objects" { $parsed.map_each(i -> i.label) } else { deleted() }
-root.alert = if $mode == "safety_check" { $parsed.risk_level.or(0) > 3 } else { deleted() }
-
-# Data integrity — SHA-256 hashes for both input and output:
-root.integrity.payload_sha256 = $raw.hash("sha256").encode("hex")
-root.integrity.frame_sha256 = this.image_base64.hash("sha256").encode("hex")
-# NOTE: image_base64 is deliberately NOT copied — data minimization.
-```
-
-Then a Makoto L1 attestation is added to every record — proving provenance, transform lineage, and executor identity per the [usemakoto.dev](https://usemakoto.dev) spec.
+**With Expanso:** You get a declarative pipeline with structured output envelopes, SHA-256 integrity hashes, data provenance attestations, and fan-out to 69+ output destinations. Add Kafka in 3 lines. Deploy to a fleet from a dashboard.
 
 ## Project Structure
 
 ```
 demo-gemma-4/
-├── pipeline.yaml          # ← THE STAR: Expanso Edge pipeline
-├── capture_frame.py       # Webcam → base64 JSON (subprocess)
-├── run.sh                 # Launcher with mode selection
-├── requirements.txt       # Python: opencv-python
-├── prompts/               # Swappable prompt templates
+├── pipeline.yaml            # Expanso Edge pipeline (the star of the show)
+├── capture_frame.py         # Webcam → base64 JSON (subprocess)
+├── run.sh                   # Pipeline launcher
+├── start-server.sh          # llama.cpp server management (start/stop/test)
+├── .env.example             # All configurable environment variables
+│
+├── web/
+│   ├── server.py            # Live dashboard + recording server
+│   └── static/
+│       ├── index.html       # Dashboard UI
+│       └── record.html      # Training data capture UI
+│
+├── prompts/                 # Prompt templates (used by older single-mode pipeline)
 │   ├── detect_objects.txt
 │   ├── detect_shapes.txt
 │   ├── read_text.txt
 │   ├── safety_check.txt
 │   └── describe_scene.txt
-└── detections/            # Auto-created: daily JSONL archives
-    └── 2026-04-03.jsonl
+│
+├── docs/
+│   ├── jetson-ops-guide.md      # Jetson memory management & operations
+│   └── hetzner-finetune-session.md  # Fine-tuning session log & architecture
+│
+├── systemd/                 # Jetson deployment (systemd services)
+│   ├── gemma4-server.service
+│   ├── gemma4-pipeline.service
+│   ├── gemma4-dashboard.service
+│   ├── gemma4-watchdog.service
+│   ├── earlyoom.service
+│   ├── ssh-oom-protect.conf
+│   └── 99-jetson-memory.conf
+│
+├── demo-ctl                 # Stack management CLI (start/stop/status/doctor)
+├── watchdog.sh              # Health + swap monitoring daemon
+├── setup-jetson.sh          # One-command Jetson setup (model download + server)
+├── mac-demo.sh              # Mac local development launcher
+├── deploy.sh                # Deploy pipeline to Expanso Cloud
+├── run-edge.sh              # Run Expanso Edge agent with local config
+│
+├── finetune_gemma4.py       # Fine-tuning script (GPU machine)
+├── finetune_gemma4.ipynb    # Fine-tuning notebook (Colab/Jupyter)
+├── label_frames.py          # Label recorded frames using Claude CLI
+├── prepare_training_data.py # Convert labels → training JSONL
+├── labels/                  # Claude-generated labels (JSONL)
+├── training_data/           # Training dataset for fine-tuning
+│
+├── Modelfile.fast           # Ollama model definition
+├── job.yaml                 # Expanso Cloud job spec
+├── dhcp-server.py           # Minimal DHCP server for IP cameras (Mac)
+└── setup-dhcp-mac.sh        # Camera network setup (Mac)
 ```
 
 ## Configuration
 
-All settings via environment variables:
+All settings via environment variables (see [`.env.example`](.env.example)):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CAPTURE_INTERVAL` | `3s` | Time between frame captures |
-| `INFERENCE_URL` | `http://localhost:11434` | Ollama / llama.cpp server URL |
-| `GEMMA_MODEL` | `gemma4-e4b-it` | Model name |
-| `NODE_ID` | `edge-cam-001` | Edge node identifier (in output) |
-| `PIPELINE_VERSION` | `1.0.0` | Version tag (in output) |
-| `CAMERA_INDEX` | `0` | OpenCV camera device index |
-| `CAPTURE_WIDTH` | `640` | Frame width (pixels) |
-| `CAPTURE_HEIGHT` | `480` | Frame height (pixels) |
-| `JPEG_QUALITY` | `80` | JPEG compression quality (1-100) |
+| `CAPTURE_INTERVAL` | `5s` | Time between frame captures |
+| `INFERENCE_URL` | `http://localhost:8081` | llama.cpp / Ollama server URL |
+| `NODE_ID` | `edge-cam-001` | Edge node identifier (in output envelope) |
+| `PIPELINE_VERSION` | `2.0.0` | Version tag (in output envelope) |
+| `CAMERA_URL` | *(empty)* | RTSP/HTTP camera URL (overrides CAMERA_INDEX) |
+| `CAMERA_INDEX` | `0` | USB webcam device index |
+| `CAPTURE_WIDTH` | `320` | Frame width (pixels) |
+| `CAPTURE_HEIGHT` | `240` | Frame height (pixels) |
+| `JPEG_QUALITY` | `70` | JPEG compression quality (1-100) |
+| `PORT` | `9090` | Dashboard web server port |
+
+## Deployment
+
+### Jetson Orin (production edge)
+
+```bash
+# One-time setup: downloads model, pulls container, starts server
+./setup-jetson.sh
+
+# Install systemd services for auto-start on boot
+./demo-ctl install
+
+# Daily operations
+./demo-ctl start      # Start full stack (server → pipeline → dashboard → watchdog)
+./demo-ctl stop       # Stop everything cleanly
+./demo-ctl status     # Health check + memory + swap + disk
+./demo-ctl doctor     # Full system diagnosis
+./demo-ctl logs       # Tail all service logs
+```
+
+See [`docs/jetson-ops-guide.md`](docs/jetson-ops-guide.md) for memory management, OOM protection, and monitoring on the 7.4GB Orin.
+
+### Mac (local development)
+
+```bash
+# Start inference server + dashboard
+./mac-demo.sh start
+
+# Deploy pipeline via Expanso Cloud
+./deploy.sh
+
+# Or run the edge agent locally
+./run-edge.sh
+```
+
+### Expanso Cloud (fleet deployment)
+
+```bash
+# Deploy pipeline to all matching nodes
+./deploy.sh
+```
+
+The pipeline runs on any node with the `host=mac` label. Edit `job.yaml` to change constraints.
+
+## Fine-Tuning
+
+The repo includes a complete fine-tuning pipeline to train Gemma 4 on your own data:
+
+### 1. Record training frames
+
+Use the dashboard's recording UI at `http://localhost:9090/record` to capture frames organized by label (person, box, bottle, sign).
+
+### 2. Label frames with Claude
+
+```bash
+python3 label_frames.py                    # Label all categories
+python3 label_frames.py --category box     # One category
+python3 label_frames.py --sample 30        # Sample N per category
+python3 label_frames.py --dry-run          # Preview only
+```
+
+This sends each frame to Claude for structured labeling (bounding boxes, text, scene description, safety assessment).
+
+### 3. Prepare training data
+
+```bash
+python3 prepare_training_data.py
+# → training_data/train.jsonl (4 training pairs per frame)
+```
+
+### 4. Fine-tune on a GPU machine
+
+```bash
+# Script (recommended):
+python3 finetune_gemma4.py --epochs 3 --lr 2e-4
+
+# Or use the Jupyter notebook:
+# Upload finetune_gemma4.ipynb to Colab with training_data/ and recordings/
+```
+
+Requires a GPU with 16GB+ VRAM (Colab T4 works). Uses [Unsloth](https://github.com/unslothai/unsloth) + LoRA for efficient training.
+
+### 5. Deploy the fine-tuned model
+
+```bash
+scp gemma4-demo-tuned/*.gguf jetson:~/models/gemma4-demo/
+# Restart the inference server
+./demo-ctl restart
+```
+
+See [`docs/hetzner-finetune-session.md`](docs/hetzner-finetune-session.md) for a complete fine-tuning session log with architecture, hyperparameters, and results.
 
 ## Adding Output Destinations
 
-Uncomment or add outputs in `pipeline.yaml`:
+Expanso Edge supports 69+ output components. Add destinations in `pipeline.yaml`:
 
 ```yaml
 output:
@@ -201,24 +297,29 @@ output:
           path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
           codec: lines
 
-      # Add a webhook (3 lines):
+      # Add a webhook:
       - http_client:
           url: https://your-api.com/detections
           verb: POST
 
-      # Add Kafka (3 lines):
+      # Add Kafka:
       - kafka:
           addresses: ["localhost:9092"]
           topic: vision-detections
 
-      # Add S3 (3 lines):
+      # Add S3:
       - aws_s3:
           bucket: my-detections
           path: 'edge/${! count("s3") }.json'
 ```
 
-One detection. As many destinations as you need. **69+ output components available.**
+## Tests
+
+```bash
+pip install pytest pyyaml
+pytest tests/
+```
 
 ## License
 
-Apache 2.0 — same as Gemma 4.
+Apache 2.0 — see [LICENSE](LICENSE).

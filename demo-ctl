@@ -97,6 +97,38 @@ cmd_install() {
         ok "Installed ${svc}.service"
     done
 
+    # ── SSH OOM protection ───────────────────────────────
+    echo ""
+    echo "Installing SSH OOM protection..."
+    sudo mkdir -p /etc/systemd/system/ssh.service.d/
+    sudo cp "${SCRIPT_DIR}/systemd/ssh-oom-protect.conf" \
+        /etc/systemd/system/ssh.service.d/override.conf
+    ok "sshd OOMScoreAdjust=-1000 (unkillable)"
+
+    # ── earlyoom — userspace OOM killer ──────────────────
+    echo ""
+    echo "Installing earlyoom..."
+    if ! command -v earlyoom &>/dev/null; then
+        if command -v apt-get &>/dev/null; then
+            sudo apt-get install -y earlyoom >/dev/null 2>&1 && \
+                ok "Installed earlyoom via apt" || \
+                warn "Failed to apt-get earlyoom — install manually: sudo apt-get install earlyoom"
+        else
+            warn "earlyoom not found and no apt — install manually"
+        fi
+    else
+        ok "earlyoom already installed"
+    fi
+    sudo cp "${SCRIPT_DIR}/systemd/earlyoom.service" /etc/systemd/system/
+    ok "Installed earlyoom.service (kills demo procs at 5% free RAM)"
+
+    # ── sysctl memory tuning ─────────────────────────────
+    echo ""
+    echo "Installing sysctl tuning..."
+    sudo cp "${SCRIPT_DIR}/systemd/99-jetson-memory.conf" /etc/sysctl.d/
+    sudo sysctl --system >/dev/null 2>&1
+    ok "vm.min_free_kbytes=262144 (256MB reserved for kernel+SSH)"
+
     sudo systemctl daemon-reload
     ok "Reloaded systemd"
 
@@ -105,6 +137,13 @@ cmd_install() {
         sudo systemctl enable "$svc" 2>/dev/null
         ok "Enabled ${svc} on boot"
     done
+
+    sudo systemctl enable earlyoom 2>/dev/null || true
+    ok "Enabled earlyoom on boot"
+
+    # Restart sshd to pick up the drop-in
+    sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+    ok "Restarted sshd with OOM protection"
 
     echo ""
     ok "Done. Run: ./demo-ctl start"
@@ -181,6 +220,14 @@ cmd_start() {
         ok "Watchdog running"
     else
         warn "Watchdog didn't start (non-critical)"
+    fi
+
+    # Ensure earlyoom is running (SSH survival net)
+    if [ -f /etc/systemd/system/earlyoom.service ]; then
+        sudo systemctl start earlyoom 2>/dev/null || true
+        if systemctl is-active earlyoom >/dev/null 2>&1; then
+            ok "earlyoom running (SSH protection active)"
+        fi
     fi
 
     echo ""
@@ -334,6 +381,29 @@ cmd_doctor() {
     # Conflict checks
     echo "Conflicts:"
     preflight && ok "No conflicts detected" || true
+    echo ""
+
+    # OOM protection checks
+    echo "OOM Protection:"
+    if [ -f /etc/systemd/system/ssh.service.d/override.conf ]; then
+        ok "sshd OOM-protected (OOMScoreAdjust=-1000)"
+    else
+        fail "sshd NOT OOM-protected — run: ./demo-ctl install"
+    fi
+    if systemctl is-active earlyoom >/dev/null 2>&1; then
+        ok "earlyoom: running (kills demo procs before kernel OOM)"
+    elif [ -f /etc/systemd/system/earlyoom.service ]; then
+        warn "earlyoom: installed but not running — start with: sudo systemctl start earlyoom"
+    else
+        fail "earlyoom: not installed — run: ./demo-ctl install"
+    fi
+    local min_free
+    min_free=$(cat /proc/sys/vm/min_free_kbytes 2>/dev/null || echo "0")
+    if [ "$min_free" -ge 200000 ]; then
+        ok "vm.min_free_kbytes=${min_free} (256MB reserved)"
+    else
+        warn "vm.min_free_kbytes=${min_free} — too low, run: ./demo-ctl install"
+    fi
     echo ""
 
     # Camera check

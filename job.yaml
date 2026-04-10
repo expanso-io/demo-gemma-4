@@ -1,6 +1,11 @@
 name: gemma4-vision-demo
 type: pipeline
 count: 1
+constraints:
+  - key: host
+    operator: "="
+    values:
+      - mac
 pipeline:
   source: inline
   config: !include pipeline.yaml

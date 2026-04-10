@@ -35,6 +35,7 @@ import json
 import base64
 import signal
 import os
+import time
 
 try:
     import cv2
@@ -49,12 +50,16 @@ except ImportError:
 # ── Configuration ──────────────────────────────────────────────
 # CAMERA_URL takes priority: supports rtsp://, http://, or file paths.
 # Falls back to CAMERA_INDEX (integer) for local USB/CSI cameras.
+# SHARED_FRAME: if the dashboard writes frames to this file, read from
+# there instead of opening the camera (avoids macOS camera contention).
 CAMERA_URL = os.environ.get("CAMERA_URL", "")
 CAMERA_INDEX = int(os.environ.get("CAMERA_INDEX", "0"))
 CAPTURE_WIDTH = int(os.environ.get("CAPTURE_WIDTH", "320"))
 CAPTURE_HEIGHT = int(os.environ.get("CAPTURE_HEIGHT", "240"))
 JPEG_QUALITY = int(os.environ.get("JPEG_QUALITY", "70"))
 WARMUP_FRAMES = int(os.environ.get("WARMUP_FRAMES", "5"))
+SHARED_FRAME = os.environ.get("SHARED_FRAME", "/tmp/gemma4-latest.jpg")
+SHARED_FRAME_MAX_AGE = 5  # seconds — fall back to camera if stale
 
 
 def open_camera():
@@ -78,6 +83,29 @@ def open_camera():
     return cap, source_label
 
 
+def _try_shared_frame():
+    """Read from shared frame file as fallback (written by dashboard)."""
+    try:
+        age = time.time() - os.path.getmtime(SHARED_FRAME)
+        if age >= SHARED_FRAME_MAX_AGE:
+            return None
+        with open(SHARED_FRAME, "rb") as f:
+            jpg_bytes = f.read()
+        if not jpg_bytes:
+            return None
+        import numpy as np
+        arr = cv2.imdecode(np.frombuffer(jpg_bytes, dtype="uint8"), cv2.IMREAD_COLOR)
+        if arr is None:
+            return None
+        arr = cv2.resize(arr, (CAPTURE_WIDTH, CAPTURE_HEIGHT))
+        _, buffer = cv2.imencode(".jpg", arr, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+        if buffer is None:
+            return None
+        return base64.b64encode(buffer).decode("utf-8")
+    except (OSError, ValueError):
+        return None
+
+
 def main():
     # ── Open camera ────────────────────────────────────────────
     cap, source_label = open_camera()
@@ -97,24 +125,22 @@ def main():
 
     # ── Main loop: one trigger in → one frame out ──────────────
     for line in sys.stdin:
+        # Direct camera capture (RTSP or USB — always preferred when available)
         ret, frame = cap.read()
-
         if not ret:
-            print(json.dumps({"error": "Failed to capture frame"}), flush=True)
-            continue
-
-        # Resize to target dimensions (ensures small images for fast inference)
-        frame = cv2.resize(frame, (CAPTURE_WIDTH, CAPTURE_HEIGHT))
-
-        # Encode frame as JPEG → base64
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
-        success, buffer = cv2.imencode(".jpg", frame, encode_params)
-
-        if not success:
-            print(json.dumps({"error": "JPEG encoding failed"}), flush=True)
-            continue
-
-        b64 = base64.b64encode(buffer).decode("utf-8")
+            # If direct capture fails, try shared frame file (dashboard writes it)
+            b64 = _try_shared_frame()
+            if b64 is None:
+                print(json.dumps({"error": "Failed to capture frame"}), flush=True)
+                continue
+        else:
+            frame = cv2.resize(frame, (CAPTURE_WIDTH, CAPTURE_HEIGHT))
+            success, buffer = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+            if not success:
+                print(json.dumps({"error": "JPEG encoding failed"}), flush=True)
+                continue
+            b64 = base64.b64encode(buffer).decode("utf-8")
 
         # Single-line JSON output (required by Expanso subprocess codec)
         print(json.dumps({"image_base64": b64}), flush=True)

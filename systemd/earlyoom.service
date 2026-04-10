@@ -1,0 +1,26 @@
+[Unit]
+Description=Early OOM Daemon — kill demo processes before kernel OOM freezes the box
+Documentation=https://github.com/rfjakob/earlyoom
+After=network.target
+
+[Service]
+Type=simple
+# Trigger at 5% free RAM / 10% free swap
+# SIGTERM first (graceful), then SIGKILL after 5s
+# --prefer matches processes to kill first (our demo stack, heaviest first)
+# --avoid protects sshd and systemd-critical processes
+ExecStart=/usr/bin/earlyoom \
+    -m 5 \
+    -s 10 \
+    --prefer "llama-server|expanso-edge|python3|gemma" \
+    --avoid "sshd|systemd|journald|NetworkManager|watchdog" \
+    -n
+Restart=always
+RestartSec=5
+
+# earlyoom itself must survive OOM pressure
+OOMScoreAdjust=-900
+MemoryMax=32M
+
+[Install]
+WantedBy=multi-user.target

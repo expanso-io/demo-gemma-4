@@ -1,5 +1,14 @@
-FROM /home/daaronch/models/gemma4-e2b/gemma-4-E2B-it-Q4_K_M.gguf
-FROM /home/daaronch/models/gemma4-e2b/mmproj-BF16.gguf
+# Ollama Modelfile for Gemma 4 E2B (fast inference settings)
+#
+# Usage:
+#   ollama create gemma4-fast -f Modelfile.fast
+#
+# Before creating, download the GGUF files to ~/models/gemma4-demo/:
+#   gemma-4-E2B-it.Q4_K_M.gguf     (2.45 GB)
+#   gemma-4-E2B-it.BF16-mmproj.gguf (942 MB)
+
+FROM ~/models/gemma4-demo/gemma-4-E2B-it.Q4_K_M.gguf
+FROM ~/models/gemma4-demo/gemma-4-E2B-it.BF16-mmproj.gguf
 
 TEMPLATE {{ .Prompt }}
 RENDERER gemma4

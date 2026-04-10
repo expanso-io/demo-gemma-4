@@ -146,6 +146,26 @@ while true; do
 done
 ```
 
+## SSH Survival — OOM Protection Stack
+
+Three layers prevent OOM from killing SSH access:
+
+| Layer | What it does | Config file |
+|---|---|---|
+| **sshd OOM immunity** | `OOMScoreAdjust=-1000` — kernel never kills sshd | `systemd/ssh-oom-protect.conf` |
+| **earlyoom** | Userspace OOM daemon — SIGTERMs demo procs at 5% free RAM, before kernel OOM freezes the box | `systemd/earlyoom.service` |
+| **vm.min_free_kbytes=256MB** | Kernel reserves 256MB that userspace can't touch — enough for sshd + a few commands | `systemd/99-jetson-memory.conf` |
+
+The kill order under pressure: dashboard (+500) → pipeline (+200) → earlyoom's `--prefer` list → anything else → **never** sshd (-1000) or earlyoom (-900).
+
+**Verify it's working:**
+```bash
+./demo-ctl doctor          # Check "OOM Protection" section
+cat /proc/$(pgrep sshd | head -1)/oom_score_adj   # Should print -1000
+systemctl status earlyoom  # Should be active
+cat /proc/sys/vm/min_free_kbytes                   # Should be 262144
+```
+
 ## Recovery: Machine Is Thrashing
 
 If the machine becomes unresponsive (heavy swap, ssh is slow):

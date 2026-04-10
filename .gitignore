@@ -1,13 +1,28 @@
-.pi/
-.pi-lens/
-.claude/
-.ruff_cache/
+# Runtime data
 detections/
 recordings/
+output/
+buffer.db
+
+# Environment (contains credentials/camera URLs)
+.env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
-output/
-.env
-buffer.db
+.ruff_cache/
+
+# Expanso Edge state
+.edge/
+
+# IDE / tooling
+.pi/
+.pi-lens/
+.claude/
+
+# Binary artifacts
+*.pptx

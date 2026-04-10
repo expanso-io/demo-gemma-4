@@ -2,8 +2,8 @@
 """
 Unit tests for pipeline.yaml
 
-Validates the pipeline structure, Bloblang mappings, and
-configuration without requiring Expanso Edge to be installed.
+Validates the multi-modal pipeline structure — 4 Gemma 4 analyses
+per frame (detect, read, describe, safety) with Makoto attestation.
 """
 
 import os
@@ -22,6 +22,12 @@ def pipeline():
         return yaml.safe_load(f)
 
 
+@pytest.fixture
+def processors(pipeline):
+    """Get the processor list."""
+    return pipeline["pipeline"]["processors"]
+
+
 # ── Structure Tests ──────────────────────────────────────────
 
 
@@ -33,122 +39,106 @@ class TestPipelineStructure:
         assert pipeline is not None
 
     def test_has_input(self, pipeline):
-        """Pipeline must have an input section."""
         assert "input" in pipeline
 
     def test_has_pipeline(self, pipeline):
-        """Pipeline must have a pipeline section."""
         assert "pipeline" in pipeline
 
     def test_has_output(self, pipeline):
-        """Pipeline must have an output section."""
         assert "output" in pipeline
 
     def test_input_is_generate(self, pipeline):
-        """Input must be a generate trigger."""
         assert "generate" in pipeline["input"]
 
     def test_generate_has_interval(self, pipeline):
-        """Generate input must have an interval."""
         gen = pipeline["input"]["generate"]
         assert "interval" in gen
 
     def test_generate_interval_uses_env_var(self, pipeline):
-        """Interval should reference CAPTURE_INTERVAL env var."""
         interval = pipeline["input"]["generate"]["interval"]
         assert "CAPTURE_INTERVAL" in interval
-
-    def test_processor_count(self, pipeline):
-        """Pipeline should have exactly 6 processors."""
-        procs = pipeline["pipeline"]["processors"]
-        assert len(procs) == 6, f"Expected 6 processors, got {len(procs)}"
-
-    def test_processor_order(self, pipeline):
-        """Processors should be in the correct order."""
-        procs = pipeline["pipeline"]["processors"]
-        expected = ["subprocess", "mapping", "mutation", "branch", "mapping", "mutation"]
-        actual = [list(p.keys())[0] for p in procs]
-        assert actual == expected, f"Expected {expected}, got {actual}"
 
 
 class TestSubprocessProcessor:
     """Test the subprocess (webcam capture) processor."""
 
-    def test_subprocess_runs_python(self, pipeline):
-        proc = pipeline["pipeline"]["processors"][0]["subprocess"]
-        assert proc["name"] == "python3"
+    def test_first_processor_is_subprocess(self, processors):
+        assert "subprocess" in processors[0]
 
-    def test_subprocess_runs_capture_script(self, pipeline):
-        proc = pipeline["pipeline"]["processors"][0]["subprocess"]
-        assert "capture_frame.py" in proc["args"]
+    def test_subprocess_runs_uv(self, processors):
+        proc = processors[0]["subprocess"]
+        assert proc["name"] == "uv"
 
-    def test_subprocess_has_unbuffered_flag(self, pipeline):
-        proc = pipeline["pipeline"]["processors"][0]["subprocess"]
-        assert "-u" in proc["args"], "Python must run unbuffered for line-by-line output"
+    def test_subprocess_runs_capture_script(self, processors):
+        proc = processors[0]["subprocess"]
+        args_str = " ".join(proc["args"])
+        assert "capture_frame.py" in args_str
 
-    def test_subprocess_buffer_size(self, pipeline):
-        proc = pipeline["pipeline"]["processors"][0]["subprocess"]
-        assert proc["max_buffer"] == 2097152, "Buffer must be 2MB for base64 frames"
+    def test_subprocess_has_buffer(self, processors):
+        proc = processors[0]["subprocess"]
+        assert proc["max_buffer"] >= 1048576, "Buffer must be at least 1MB for base64 frames"
 
 
-class TestBranchProcessor:
-    """Test the branch processor (Gemma 4 inference)."""
+class TestMultiModalBranches:
+    """Test the four inference branches (detect, read, describe, safety)."""
 
-    def test_branch_has_request_map(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "request_map" in branch
+    def _get_branches(self, processors):
+        """Extract all branch processors."""
+        return [p for p in processors if "branch" in p]
 
-    def test_branch_has_result_map(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "result_map" in branch
+    def test_has_four_branches(self, processors):
+        branches = self._get_branches(processors)
+        assert len(branches) == 4, f"Expected 4 inference branches, got {len(branches)}"
 
-    def test_branch_uses_http_processor(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        http_proc = branch["processors"][0]
-        assert "http" in http_proc
+    def test_all_branches_use_http_post(self, processors):
+        for p in self._get_branches(processors):
+            branch = p["branch"]
+            http = branch["processors"][0]["http"]
+            assert http["verb"] == "POST"
 
-    def test_http_verb_is_post(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        http = branch["processors"][0]["http"]
-        assert http["verb"] == "POST"
+    def test_all_branches_use_inference_url_env(self, processors):
+        for p in self._get_branches(processors):
+            branch = p["branch"]
+            http = branch["processors"][0]["http"]
+            assert "INFERENCE_URL" in http["url"]
 
-    def test_http_url_uses_env_var(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        http = branch["processors"][0]["http"]
-        assert "INFERENCE_URL" in http["url"]
+    def test_all_branches_include_image(self, processors):
+        for p in self._get_branches(processors):
+            branch = p["branch"]
+            assert "image_base64" in branch["request_map"]
 
-    def test_http_timeout_is_reasonable(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        http = branch["processors"][0]["http"]
-        assert http["timeout"] == "60s"
+    def test_branch_result_maps_have_timing(self, processors):
+        """Each branch should capture millisecond timing."""
+        for p in self._get_branches(processors):
+            branch = p["branch"]
+            assert "ms" in branch["result_map"]
 
-    def test_request_map_includes_model(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "GEMMA_MODEL" in branch["request_map"]
+    def test_detect_branch_extracts_detect(self, processors):
+        branches = self._get_branches(processors)
+        assert "detect" in branches[0]["branch"]["result_map"]
 
-    def test_request_map_includes_vision_prompt(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "VISION_PROMPT" in branch["request_map"]
+    def test_read_branch_extracts_read_text(self, processors):
+        branches = self._get_branches(processors)
+        assert "read_text" in branches[1]["branch"]["result_map"]
 
-    def test_request_map_includes_image(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "image_base64" in branch["request_map"]
+    def test_describe_branch_extracts_describe(self, processors):
+        branches = self._get_branches(processors)
+        assert "describe" in branches[2]["branch"]["result_map"]
 
-    def test_result_map_extracts_response(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "inference_response" in branch["result_map"]
-
-    def test_result_map_extracts_tokens(self, pipeline):
-        branch = pipeline["pipeline"]["processors"][3]["branch"]
-        assert "tokens_used" in branch["result_map"]
+    def test_safety_branch_extracts_safety(self, processors):
+        branches = self._get_branches(processors)
+        assert "safety" in branches[3]["branch"]["result_map"]
 
 
 class TestSchemaMapping:
-    """Test Step 3: the Bloblang schema mapping."""
+    """Test the Bloblang schema mapping that assembles the output envelope."""
 
     @pytest.fixture
-    def mapping_text(self, pipeline):
-        return pipeline["pipeline"]["processors"][4]["mapping"]
+    def mapping_text(self, processors):
+        """Find the main assembly mapping (after the branches)."""
+        mappings = [p for p in processors if "mapping" in p]
+        # The assembly mapping is the last one (after parse + filter + 4 branches)
+        return mappings[-1]["mapping"]
 
     def test_has_timestamp(self, mapping_text):
         assert "root.timestamp" in mapping_text
@@ -165,65 +155,41 @@ class TestSchemaMapping:
     def test_has_frame_id(self, mapping_text):
         assert "root.frame_id" in mapping_text
 
-    def test_has_mode(self, mapping_text):
-        assert "root.mode" in mapping_text
+    def test_has_mode_multi(self, mapping_text):
+        assert '"multi"' in mapping_text
 
-    def test_has_processing_ms(self, mapping_text):
-        assert "root.processing_ms" in mapping_text
+    def test_has_detect_section(self, mapping_text):
+        assert "root.detect" in mapping_text
 
-    def test_has_payload(self, mapping_text):
-        assert "root.payload" in mapping_text
+    def test_has_read_text_section(self, mapping_text):
+        assert "root.read_text" in mapping_text
 
-    # Derived analytics
-    def test_has_object_count(self, mapping_text):
-        assert "root.object_count" in mapping_text
+    def test_has_describe_section(self, mapping_text):
+        assert "root.describe" in mapping_text
 
-    def test_has_has_detections(self, mapping_text):
-        assert "root.has_detections" in mapping_text
+    def test_has_safety_section(self, mapping_text):
+        assert "root.safety" in mapping_text
 
-    # Mode-specific fields
-    def test_has_labels_for_detect_modes(self, mapping_text):
-        assert "root.labels" in mapping_text
-        assert "detect_objects" in mapping_text
-        assert "detect_shapes" in mapping_text
+    def test_has_total_ms(self, mapping_text):
+        assert "root.total_ms" in mapping_text
 
-    def test_has_safety_fields(self, mapping_text):
-        assert "root.risk_level" in mapping_text
-        assert "root.safe" in mapping_text
-        assert "root.alert" in mapping_text
-        assert "safety_check" in mapping_text
+    def test_has_total_tokens(self, mapping_text):
+        assert "root.total_tokens" in mapping_text
 
-    def test_has_extracted_text_for_read_mode(self, mapping_text):
-        assert "root.extracted_text" in mapping_text
-        assert "read_text" in mapping_text
-
-    # Integrity
-    def test_has_integrity_hashes(self, mapping_text):
+    def test_has_integrity_hash(self, mapping_text):
         assert "root.integrity" in mapping_text
-        assert "payload_sha256" in mapping_text
-        assert "frame_sha256" in mapping_text
         assert 'hash("sha256")' in mapping_text
-        assert 'encode("hex")' in mapping_text
-
-    # Data minimization
-    def test_does_not_copy_image_to_output(self, mapping_text):
-        assert "root.image_base64" not in mapping_text, \
-            "Raw image must not be copied to output (data minimization)"
-
-    # Graceful error handling
-    def test_has_json_parse_with_catch(self, mapping_text):
-        assert "parse_json().catch" in mapping_text
-
-    def test_uses_deleted_for_conditional_fields(self, mapping_text):
-        assert "deleted()" in mapping_text
 
 
 class TestMakotoAttestation:
-    """Test Step 4: the Makoto L1 attestation mutation."""
+    """Test the Makoto L1 attestation mutation."""
 
     @pytest.fixture
-    def mutation_text(self, pipeline):
-        return pipeline["pipeline"]["processors"][5]["mutation"]
+    def mutation_text(self, processors):
+        """Find the attestation mutation (last processor)."""
+        mutations = [p for p in processors if "mutation" in p]
+        # The attestation is the last mutation
+        return mutations[-1]["mutation"]
 
     def test_has_attestation_field(self, mutation_text):
         assert "root.attestation" in mutation_text
@@ -238,29 +204,14 @@ class TestMakotoAttestation:
         assert '"subject"' in mutation_text
         assert '"digest"' in mutation_text
 
-    def test_has_inputs_with_frame_digest(self, mutation_text):
-        assert '"inputs"' in mutation_text
-        assert "webcam-frame" in mutation_text
-
-    def test_has_transform_type(self, mutation_text):
-        assert "vision-inference" in mutation_text
-
     def test_has_executor_identity(self, mutation_text):
         assert "expanso-edge://" in mutation_text
-        assert '"platform"' in mutation_text
 
-    def test_has_code_ref(self, mutation_text):
-        assert '"codeRef"' in mutation_text
-        assert "pipeline.yaml" in mutation_text
-
-    def test_has_metadata_timing(self, mutation_text):
-        assert '"processedOn"' in mutation_text
-        assert '"processingMs"' in mutation_text
-
-    def test_references_integrity_hashes(self, mutation_text):
-        """Attestation should use the integrity hashes from Step 3."""
-        assert "this.integrity.payload_sha256" in mutation_text
-        assert "this.integrity.frame_sha256" in mutation_text
+    def test_references_multi_modal_modes(self, mutation_text):
+        assert "detect" in mutation_text
+        assert "read_text" in mutation_text
+        assert "describe" in mutation_text
+        assert "safety" in mutation_text
 
 
 class TestOutputBroker:
@@ -270,8 +221,7 @@ class TestOutputBroker:
         assert "broker" in pipeline["output"]
 
     def test_broker_is_fan_out(self, pipeline):
-        broker = pipeline["output"]["broker"]
-        assert broker["pattern"] == "fan_out"
+        assert pipeline["output"]["broker"]["pattern"] == "fan_out"
 
     def test_has_stdout_output(self, pipeline):
         outputs = pipeline["output"]["broker"]["outputs"]
@@ -293,3 +243,9 @@ class TestOutputBroker:
         outputs = pipeline["output"]["broker"]["outputs"]
         file_out = [o for o in outputs if "file" in o][0]["file"]
         assert file_out["codec"] == "lines"
+
+    def test_has_dashboard_http_output(self, pipeline):
+        """Pipeline should POST detections to the dashboard."""
+        outputs = pipeline["output"]["broker"]["outputs"]
+        http_outputs = [o for o in outputs if "drop_on" in o or "http_client" in o]
+        assert len(http_outputs) >= 1

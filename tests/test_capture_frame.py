@@ -101,9 +101,9 @@ class TestCaptureFrameScript:
             proc.kill()
             pytest.fail("capture_frame.py timed out after 10s")
 
-        lines = [l for l in stdout.decode().strip().split("\n") if l]
+        lines = [ln for ln in stdout.decode().strip().split("\n") if ln]
         # Filter out status messages, keep only frame outputs
-        frame_lines = [l for l in lines if '"image_base64"' in l]
+        frame_lines = [ln for ln in lines if '"image_base64"' in ln]
         assert len(frame_lines) >= 1, f"Expected at least 1 frame line, got {len(frame_lines)} (total lines: {len(lines)})"
 
         # Parse the JSON
@@ -140,9 +140,9 @@ class TestCaptureFrameScript:
             proc.kill()
             pytest.fail("Timed out")
 
-        lines = [l for l in stdout.decode().strip().split("\n") if l]
+        lines = [ln for ln in stdout.decode().strip().split("\n") if ln]
         # Filter out status messages, keep only frame outputs
-        frame_lines = [l for l in lines if '"image_base64"' in l]
+        frame_lines = [ln for ln in lines if '"image_base64"' in ln]
         assert len(frame_lines) == 3, f"Expected 3 frames, got {len(frame_lines)} (total lines: {len(lines)})"
 
         for i, line in enumerate(frame_lines):

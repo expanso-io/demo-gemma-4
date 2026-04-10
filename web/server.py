@@ -23,6 +23,7 @@ Usage:
 import glob
 import json
 import os
+import tempfile
 import threading
 import time
 from datetime import datetime
@@ -45,6 +46,7 @@ DETECTIONS_DIR = os.environ.get("DETECTIONS_DIR",
 STATIC_DIR = str(Path(__file__).parent / "static")
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR",
     str(Path(__file__).parent.parent / "recordings"))
+SHARED_FRAME = os.environ.get("SHARED_FRAME", "/tmp/gemma4-latest.jpg")
 
 # ── Shared State ───────────────────────────────────────────
 latest_frame_jpg = None
@@ -54,6 +56,7 @@ sse_clients = []
 sse_lock = threading.Lock()
 recent_detections = []
 MAX_HISTORY = 20
+last_http_detection = 0  # timestamp of last HTTP POST detection
 
 # Recording state
 recording_lock = threading.Lock()
@@ -104,9 +107,20 @@ def camera_loop():
 
                 _, buf = cv2.imencode(".jpg", frame,
                     [cv2.IMWRITE_JPEG_QUALITY, 75])
+                jpg_bytes = buf.tobytes()
                 with frame_lock:
-                    latest_frame_jpg = buf.tobytes()
+                    latest_frame_jpg = jpg_bytes
                     latest_frame_raw = frame.copy()
+
+                # Write to shared file so pipeline can read without opening camera
+                try:
+                    tmp_fd, tmp_path = tempfile.mkstemp(
+                        dir=os.path.dirname(SHARED_FRAME), suffix=".jpg")
+                    os.write(tmp_fd, jpg_bytes)
+                    os.close(tmp_fd)
+                    os.replace(tmp_path, SHARED_FRAME)
+                except OSError:
+                    pass
 
                 # Save frame if recording (at lower rate)
                 save_recording_frame(frame)
@@ -140,10 +154,15 @@ def save_recording_frame(frame):
 
 # ── JSONL Watcher Thread ──────────────────────────────────
 def jsonl_watcher():
-    """Watch detections/ dir for new JSONL lines."""
+    """Watch detections/ dir for new JSONL lines (fallback when HTTP POST is down)."""
     last_pos = {}
     while True:
         try:
+            # Skip if HTTP POST detections are active (avoids duplicates)
+            if time.time() - last_http_detection < 30:
+                time.sleep(2)
+                continue
+
             files = sorted(glob.glob(os.path.join(DETECTIONS_DIR, "*.jsonl")))
             if not files:
                 time.sleep(1)
@@ -202,10 +221,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/api/detection":
+            global last_http_detection
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length)
             try:
                 data = json.loads(body)
+                last_http_detection = time.time()
                 broadcast_detection(data)
                 self._json_response({"ok": True})
             except Exception:

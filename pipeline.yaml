@@ -57,7 +57,7 @@ pipeline:
               {
                 "role": "user",
                 "content": [
-                  {"type": "text", "text": "Which are visible? person, box, bottle, sign. CSV only, no explanation."},
+                  {"type": "text", "text": "Which of these objects are actually visible in this image: person, box, bottle, sign? List only the ones you can see, CSV. If none, reply: none"},
                   {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
                 ]
               }
@@ -96,7 +96,7 @@ pipeline:
               {
                 "role": "user",
                 "content": [
-                  {"type": "text", "text": "Read all text visible in this image. Return only the text strings, comma-separated. Nothing else."},
+                  {"type": "text", "text": "Read all text visible in this image. Return only the text strings, comma-separated. If no text is visible, reply: none"},
                   {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + this.image_base64}}
                 ]
               }

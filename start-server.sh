@@ -51,7 +51,6 @@ start_server() {
         --threads 4 \
         --flash-attn true \
         --reasoning off \
-        --reasoning-budget 0 \
         > "${LOG}" 2>&1 &
 
     echo "Waiting for model to load..."
