@@ -1,0 +1,50 @@
+/* Self-hosted typefaces. Nothing here touches the network at run time.
+ *
+ * These are the same families and weights the demo already used; only the
+ * delivery changed. Fetching them from a CDN meant the demo rendered in
+ * fallback faces whenever the network was slow or captive-portalled, which
+ * on a conference floor is a live-demo failure rather than a style question.
+ *
+ * Latin subset, SIL OFL. url() resolves relative to this file, so any page
+ * can link it at whatever depth it sits.
+ */
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("figtree-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("figtree-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("figtree-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("jetbrains-mono-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("jetbrains-mono-500.woff2") format("woff2");
+}
