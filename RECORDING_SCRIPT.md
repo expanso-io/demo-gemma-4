@@ -1,6 +1,7 @@
 # Recording script — Gemma 4 × Expanso Edge (60 seconds)
 
-> **Draft.** Message and beats derived from this repo's README and pipeline.
+> **Draft.** The opening beat is rebuilt from customer language — see
+> `2026-08-20-demo-design-review/external-triangulation.md`. Message and beats derived from this repo's README and pipeline.
 > The audience line is a guess — correct it before recording.
 
 **For:** vision and multi-modal conversations, Google/Gemma partner slots, booth
@@ -29,9 +30,9 @@ tour, record that separately and call it a walkthrough.
 
 *Hold the object up to the camera. Dashboard visible.*
 
-A camera produces pixels. Every system downstream of it wants rows — something
-with fields you can query, join and alert on. Bridging that gap is normally a
-cloud round trip per frame.
+A camera produces pixels; everything downstream wants rows. Bridge that gap in
+the cloud and you are paying per frame, continuously, to turn video you already
+had into a database row.
 
 ---
 
