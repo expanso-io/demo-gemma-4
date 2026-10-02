@@ -1,0 +1,18 @@
+# Text-only review uses the demo-kit gateway. Vision inference stays local.
+# Fixture replay is the default. Live review calls are operator-started.
+port = 18153
+fixtures = "fixtures/model"
+state = ".runtime/gateway"
+timeout_s = 240
+
+[caps]
+per_run = 2
+per_minute = 1
+per_day = 20
+
+[models]
+gemini = "gemini-3.8-flash-medium"
+claude = "sonnet"
+codex = ""
+kimi = ""
+local = "ministral-3:3b"

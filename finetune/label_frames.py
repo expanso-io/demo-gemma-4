@@ -1,220 +1,187 @@
 #!/usr/bin/env python3
-"""
-Label recorded frames using Claude CLI (already authenticated).
+"""Label a bounded set of training frames with the local Gemma server.
 
-Sends each frame to Claude and asks for bounding box annotations + labels.
-Outputs JSONL for fine-tuning.
-
-Usage:
-    python3 label_frames.py                     # Label all
-    python3 label_frames.py --category box      # One category
-    python3 label_frames.py --sample 30         # Sample per category
-    python3 label_frames.py --dry-run           # Preview only
+This is an edge-vision workload, so frames stay local. Calls are sequential
+and the default run processes at most 12 frames. The script never invokes a
+provider CLI or reads a provider credential.
 """
 
 import argparse
+import base64
 import json
+import os
 import random
-import subprocess
-import sys
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-RECORDINGS_DIR = Path(__file__).parent / "recordings"
-OUTPUT_DIR = Path(__file__).parent / "labels"
+ROOT = Path(__file__).parent
+RECORDINGS_DIR = ROOT / "recordings"
+OUTPUT_DIR = ROOT / "labels"
+DEFAULT_MAX_FRAMES = 12
 
-PROMPT = """Analyze this image and identify all objects present.
-
-For each object, provide:
-- label: one of [box, bottle, sign, person] or "none" if the category doesn't apply
-- bounding box: [y1, x1, y2, x2] as percentages (0-100) of image dimensions
-- confidence: 0.0-1.0
-- text_visible: any text you can read on the object (empty string if none)
-
-Also provide:
-- scene_description: one sentence, 15 words max
+PROMPT = """\
+Analyze the image and return one JSON object with:
+- objects: label, bbox [y1, x1, y2, x2] as percentages, confidence, and text_visible
+- scene_description: one sentence, at most 15 words
 - safety_assessment: "safe" or "alert: [reason]"
-
-Return ONLY valid JSON, no markdown fences:
-{
-  "objects": [
-    {"label": "box", "bbox": [10, 20, 80, 90], "confidence": 0.95, "text_visible": "FedEx Express"}
-  ],
-  "scene_description": "A person holds a shipping box at a table.",
-  "safety_assessment": "safe"
-}"""
+Labels must be box, bottle, sign, person, or none. Return JSON only.
+"""
 
 
-def label_frame(image_path: str, model: str) -> dict:
-    """Send a frame to Claude CLI and get structured labels."""
-    schema = json.dumps({
-        "type": "object",
-        "properties": {
-            "objects": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "label": {"type": "string", "enum": ["box", "bottle", "sign", "person", "none"]},
-                        "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
-                        "confidence": {"type": "number"},
-                        "text_visible": {"type": "string"}
-                    },
-                    "required": ["label", "bbox", "confidence"]
-                }
-            },
-            "scene_description": {"type": "string"},
-            "safety_assessment": {"type": "string"}
-        },
-        "required": ["objects", "scene_description", "safety_assessment"]
-    })
-
-    full_prompt = f"Read the file {image_path} and analyze the image.\n\n{PROMPT}"
-    result = subprocess.run(
-        [
-            "claude", "-p", full_prompt,
-            "--model", model,
-            "--output-format", "json",
-            "--json-schema", schema,
-            "--allowedTools", "Read",
-        ],
-        capture_output=True, text=True, timeout=120
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"claude CLI error: {result.stderr.strip()}")
-
-    raw = result.stdout.strip()
-
-    try:
-        outer = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"image": str(image_path), "model": model, "raw": raw, "parse_error": True}
-
-    # Extract structured_output from CLI JSON envelope
-    structured = outer.get("structured_output", {})
-    cost = outer.get("total_cost_usd", 0)
-
-    return {
-        "image": str(image_path),
+def request_label(
+    image_path: Path,
+    inference_url: str,
+    model: str,
+    timeout: float = 120,
+) -> dict:
+    """Send one image to the local OpenAI-compatible Gemma endpoint."""
+    encoded = base64.b64encode(image_path.read_bytes()).decode()
+    body = {
         "model": model,
-        "cost_usd": cost,
-        **structured,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+                    },
+                ],
+            }
+        ],
+        "max_tokens": 512,
+        "temperature": 0.1,
     }
+    request = urllib.request.Request(
+        f"{inference_url.rstrip('/')}/v1/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        detail = error.read(400).decode(errors="replace")
+        raise RuntimeError(f"local inference HTTP {error.code}: {detail}") from error
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"local inference unavailable: {error}") from error
+
+    raw = str(payload["choices"][0]["message"]["content"]).strip()
+    if raw.startswith("```"):
+        raw = raw.removeprefix("```json").removeprefix("```")
+        raw = raw.removesuffix("```").strip()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("local model returned non-JSON labels") from error
+    if not isinstance(result.get("objects"), list):
+        raise TypeError("local model response has no objects array")
+    return result
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Label frames with Claude CLI")
-    parser.add_argument("--category", type=str, help="Label only this category")
-    parser.add_argument("--model", type=str, default="claude-opus-4-6",
-                        help="Model to use (default: claude-opus-4-6)")
-    parser.add_argument("--sample", type=int, default=0,
-                        help="Sample N frames per category (0=all)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would be labeled without calling API")
-    parser.add_argument("--parallel", type=int, default=4,
-                        help="Number of parallel claude calls (default: 4)")
-    args = parser.parse_args()
+def select_frames(
+    recordings_dir: Path,
+    category: str | None,
+    sample: int,
+    max_frames: int,
+) -> list[tuple[str, Path]]:
+    """Select a bounded, category-balanced list of frame paths."""
+    if not recordings_dir.exists():
+        return []
+    candidates: list[tuple[str, Path]] = []
+    for directory in sorted(recordings_dir.iterdir()):
+        if not directory.is_dir() or (category and directory.name != category):
+            continue
+        frames = sorted(directory.glob("*.jpg"))
+        if sample and len(frames) > sample:
+            frames = sorted(random.sample(frames, sample))
+        candidates.extend((directory.name, frame) for frame in frames)
+    return candidates[:max_frames]
 
-    # Verify claude CLI is available and authenticated
-    if not args.dry_run:
-        check = subprocess.run(["claude", "auth", "status"],
-                               capture_output=True, text=True)
-        if "loggedIn" not in check.stdout or "true" not in check.stdout:
-            print("Claude CLI not authenticated. Run: claude auth login")
-            sys.exit(1)
-        print("Claude CLI: authenticated")
+
+def existing_images(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    found = set()
+    for line in path.read_text().splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if "error" not in record:
+            found.add(str(record.get("image", "")))
+    return found
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Label training frames with the local Gemma server"
+    )
+    parser.add_argument("--category")
+    parser.add_argument("--sample", type=int, default=0)
+    parser.add_argument("--max-frames", type=int, default=DEFAULT_MAX_FRAMES)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--inference-url",
+        default=os.environ.get("INFERENCE_URL", "http://127.0.0.1:8081"),
+    )
+    parser.add_argument("--model", default="gemma4")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.max_frames < 1 or args.max_frames > 100:
+        raise SystemExit("--max-frames must be between 1 and 100")
+    if args.sample < 0:
+        raise SystemExit("--sample must be non-negative")
+
+    selected = select_frames(
+        RECORDINGS_DIR,
+        args.category,
+        args.sample,
+        args.max_frames,
+    )
+    print(f"Selected {len(selected)} frame(s); cap {args.max_frames}")
+    if args.dry_run:
+        for category, frame in selected:
+            print(f"  {category}: {frame.name}")
+        return 0
+    if not selected:
+        print(f"No frames found under {RECORDINGS_DIR}")
+        return 0
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-
-    # Gather frames
-    categories = {}
-    for d in sorted(RECORDINGS_DIR.iterdir()):
-        if not d.is_dir():
+    completed = 0
+    for category, frame in selected:
+        output = OUTPUT_DIR / f"{category}.jsonl"
+        if str(frame) in existing_images(output):
+            print(f"skip {category}/{frame.name}: already labeled")
             continue
-        if args.category and d.name != args.category:
-            continue
-        frames = sorted(d.glob("*.jpg"))
-        if args.sample > 0 and len(frames) > args.sample:
-            frames = sorted(random.sample(frames, args.sample))
-        categories[d.name] = frames
+        try:
+            result = request_label(frame, args.inference_url, args.model)
+        except RuntimeError as error:
+            print(f"stop {category}/{frame.name}: {error}")
+            return 1
+        record = {
+            "image": str(frame),
+            "model": args.model,
+            "source": "local",
+            "category": category,
+            **result,
+        }
+        with output.open("a") as handle:
+            handle.write(json.dumps(record) + "\n")
+        completed += 1
+        labels = [item.get("label") for item in result["objects"]]
+        print(f"[{completed}/{len(selected)}] {category}/{frame.name}: {labels}")
 
-    total = sum(len(f) for f in categories.values())
-    print(f"Categories: {list(categories.keys())}")
-    print(f"Total frames: {total}")
-    print(f"Model: {args.model}")
-
-    if args.dry_run:
-        for cat, frames in categories.items():
-            print(f"  {cat}: {len(frames)} frames")
-        return
-
-    print()
-
-    done = 0
-    errors = 0
-    for cat, frames in categories.items():
-        out_path = OUTPUT_DIR / f"{cat}.jsonl"
-
-        # Skip already-labeled frames
-        existing = set()
-        if out_path.exists():
-            with open(out_path) as f:
-                for line in f:
-                    try:
-                        rec = json.loads(line)
-                        if "error" not in rec:
-                            existing.add(rec.get("image", ""))
-                    except json.JSONDecodeError:
-                        pass
-        remaining = [f for f in frames if str(f) not in existing]
-
-        if not remaining:
-            print(f"{cat}: all {len(frames)} frames already labeled, skipping")
-            done += len(frames)
-            continue
-
-        print(f"Labeling {cat}: {len(remaining)} frames ({len(existing)} already done) → {out_path}")
-
-        write_lock = threading.Lock()
-
-        def process_frame(frame):
-            try:
-                result = label_frame(str(frame), args.model)
-                result["category"] = cat
-                return frame, result, None
-            except Exception as e:
-                return frame, None, e
-
-        with open(out_path, "a") as out_f, \
-             ThreadPoolExecutor(max_workers=args.parallel) as pool:
-            futures = {pool.submit(process_frame, f): f for f in remaining}
-            for future in as_completed(futures):
-                done += 1
-                frame, result, err = future.result()
-                if err:
-                    errors += 1
-                    print(f"  [{done}/{total}] {frame.name}: ERROR - {err}")
-                    with write_lock:
-                        out_f.write(json.dumps({
-                            "image": str(frame),
-                            "category": cat,
-                            "error": str(err),
-                        }) + "\n")
-                else:
-                    with write_lock:
-                        out_f.write(json.dumps(result) + "\n")
-                        out_f.flush()
-                    labels = [o["label"] for o in result.get("objects", [])]
-                    text = [o.get("text_visible", "") for o in result.get("objects", []) if o.get("text_visible")]
-                    extra = f" text={text}" if text else ""
-                    cost = result.get("cost_usd", 0)
-                    print(f"  [{done}/{total}] {frame.name}: {labels}{extra} (${cost:.3f})")
-
-    print(f"\nDone! {done} labeled, {errors} errors")
-    print(f"Output: {OUTPUT_DIR}/")
+    print(f"Wrote {completed} local label record(s) to {OUTPUT_DIR}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

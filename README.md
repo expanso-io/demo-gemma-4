@@ -21,7 +21,7 @@ Built off potential user requirements for embedded multi-modal edge vision: turn
 ### Prerequisites
 
 - **[Expanso Edge](https://docs.expanso.io/getting-started/quickstart/)** — the pipeline runtime
-- **Python 3.10+** with OpenCV (`pip install opencv-python`)
+- **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/)
 - **A Gemma 4 inference server** — either:
   - [llama.cpp](https://github.com/ggerganov/llama.cpp) with GGUF (recommended for Jetson)
   - [Ollama](https://ollama.ai) with `ollama pull gemma3`
@@ -100,13 +100,25 @@ uv run web/server.py
 
 The dashboard shows live camera feed, real-time Gemma 4 analysis, and detection history. It also supports **recording frames by label** for fine-tuning dataset creation.
 
+### Model call boundaries
+
+Frame analysis stays on the local Gemma server. The four requests for a frame
+run sequentially, do not retry, and stop after three frames by default. Set
+`MAX_FRAMES` for a deliberate longer hardware run.
+
+The fine-tuning labeler also uses the local vision server, processes frames
+sequentially, and caps a run at 12 frames by default. It never invokes a model
+provider CLI. A separate text-only dataset review goes through the demo-kit
+model gateway. That review replays a committed fixture unless an operator
+starts the gateway in capped live mode with a subscription backend.
+
 ## How It Works
 
 The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 
 | Stage | What Happens |
 |-------|-------------|
-| **Trigger** | `generate` fires every 5 seconds (configurable via `CAPTURE_INTERVAL`) |
+| **Trigger** | `generate` fires every 5 seconds and stops emitting after `MAX_FRAMES` |
 | **Capture** | `subprocess` runs `capture_frame.py` — grabs a frame, outputs base64 JPEG |
 | **4× Infer** | Four sequential `branch` processors send the same frame to Gemma 4 with different prompts: detect, read, describe, safety |
 | **Schema** | Bloblang `mapping` assembles a structured envelope with derived analytics, per-mode fields, and timing |
@@ -124,6 +136,8 @@ The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 ```
 demo-gemma-4/
 ├── pipeline.yaml              # Expanso Edge pipeline (the star of the show)
+├── model-gateway.toml         # Fixture-first text review gateway
+├── fixtures/model/            # Recorded review for zero-call rehearsal
 ├── capture_frame.py           # Webcam → base64 JSON (subprocess)
 ├── run.sh                     # Pipeline launcher
 ├── .env.example               # All configurable environment variables
@@ -151,9 +165,10 @@ demo-gemma-4/
 ├── finetune/                  # Fine-tuning pipeline
 │   ├── finetune_gemma4.py     #   Fine-tuning script (GPU machine)
 │   ├── finetune_gemma4.ipynb  #   Fine-tuning notebook (Colab/Jupyter)
-│   ├── label_frames.py        #   Label recorded frames using Claude CLI
+│   ├── label_frames.py        #   Capped local Gemma vision labeling
+│   ├── review_labels.py       #   One gateway review of label counts
 │   ├── prepare_training_data.py  # Convert labels → training JSONL
-│   ├── labels/                #   Claude-generated labels (JSONL)
+│   ├── labels/                #   Structured frame labels (JSONL)
 │   └── training_data/         #   Training dataset
 │
 ├── prompts/                   # Prompt templates
@@ -169,6 +184,7 @@ All settings via environment variables (see [`.env.example`](.env.example)):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CAPTURE_INTERVAL` | `5s` | Time between frame captures |
+| `MAX_FRAMES` | `3` | Local vision frames processed per run |
 | `INFERENCE_URL` | `http://localhost:8081` | llama.cpp / Ollama server URL |
 | `NODE_ID` | `edge-cam-001` | Edge node identifier (in output envelope) |
 | `PIPELINE_VERSION` | `2.0.0` | Version tag (in output envelope) |
@@ -229,22 +245,36 @@ The repo includes a complete fine-tuning pipeline in [`finetune/`](finetune/) to
 
 Use the dashboard's recording UI at `http://localhost:9090/record` to capture frames organized by label (person, box, bottle, sign).
 
-### 2. Label frames with Claude
+### 2. Label frames with local Gemma
 
 ```bash
-cd finetune
-python3 label_frames.py                    # Label all categories
-python3 label_frames.py --category box     # One category
-python3 label_frames.py --sample 30        # Sample N per category
-python3 label_frames.py --dry-run          # Preview only
+uv run finetune/label_frames.py
+uv run finetune/label_frames.py \
+--category box \
+--max-frames 12
+uv run finetune/label_frames.py --dry-run
 ```
 
-This sends each frame to Claude for structured labeling (bounding boxes, text, scene description, safety assessment).
+The labeler sends each frame to `INFERENCE_URL` one at a time. It stops at the
+run cap and writes bounding boxes, text, scene description, and safety labels.
+
+Review the checked-in label inventory through the fixture-first gateway:
+
+```bash
+just gateway-up
+just review-labels
+just gateway-status
+just gateway-down
+```
+
+Fixture mode makes zero live calls. To refresh the fixture, start the gateway
+once with `GATEWAY_MODE=live`, `GATEWAY_BACKEND=gemini`, and
+`GATEWAY_RECORD=1`, then run `just review-labels` from a terminal.
 
 ### 3. Prepare training data
 
 ```bash
-python3 prepare_training_data.py
+uv run finetune/prepare_training_data.py
 # → training_data/train.jsonl (4 training pairs per frame)
 ```
 
@@ -252,7 +282,9 @@ python3 prepare_training_data.py
 
 ```bash
 # Script (recommended):
-python3 finetune_gemma4.py --epochs 3 --lr 2e-4
+uv run finetune/finetune_gemma4.py \
+--epochs 3 \
+--lr 2e-4
 
 # Or use the Jupyter notebook:
 # Upload finetune_gemma4.ipynb to Colab with training_data/ and recordings/
@@ -302,8 +334,8 @@ output:
 ## Tests
 
 ```bash
-pip install pytest pyyaml
-pytest tests/
+just check
+gitleaks git --no-banner
 ```
 
 ## License

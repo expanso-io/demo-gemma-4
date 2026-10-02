@@ -58,6 +58,11 @@ class TestPipelineStructure:
         interval = pipeline["input"]["generate"]["interval"]
         assert "CAPTURE_INTERVAL" in interval
 
+    def test_generate_caps_frames_by_default(self, pipeline):
+        mapping = pipeline["input"]["generate"]["mapping"]
+        assert "MAX_FRAMES" in mapping
+        assert '.or("3")' in mapping
+
 
 class TestSubprocessProcessor:
     """Test the subprocess (webcam capture) processor."""
@@ -76,7 +81,9 @@ class TestSubprocessProcessor:
 
     def test_subprocess_has_buffer(self, processors):
         proc = processors[0]["subprocess"]
-        assert proc["max_buffer"] >= 1048576, "Buffer must be at least 1MB for base64 frames"
+        assert proc["max_buffer"] >= 1048576, (
+            "Buffer must be at least 1MB for base64 frames"
+        )
 
 
 class TestMultiModalBranches:
@@ -101,6 +108,11 @@ class TestMultiModalBranches:
             branch = p["branch"]
             http = branch["processors"][0]["http"]
             assert "INFERENCE_URL" in http["url"]
+
+    def test_local_inference_does_not_retry(self, processors):
+        for processor in self._get_branches(processors):
+            http = processor["branch"]["processors"][0]["http"]
+            assert http["retries"] == 0
 
     def test_all_branches_include_image(self, processors):
         for p in self._get_branches(processors):

@@ -1,0 +1,15 @@
+[project]
+name = "demo-gemma-4"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "opencv-python>=4.8",
+    "pytest>=8.3",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.12"]
+
+[tool.uv]
+package = false

@@ -13,6 +13,7 @@
 #
 # Configuration (environment variables):
 #   CAPTURE_INTERVAL  Frame capture interval    (default: 12s)
+#   MAX_FRAMES        Frames processed per run  (default: 3)
 #   INFERENCE_URL     llama.cpp server          (default: http://localhost:8081)
 #   NODE_ID           Edge node identifier       (default: edge-cam-001)
 #   PIPELINE_VERSION  Version tag for output     (default: 2.0.0)
@@ -21,7 +22,12 @@
 # ── Input: trigger every N seconds ─────────────────────────────
 input:
   generate:
-    mapping: 'root = ""'
+    mapping: |
+      root = if count("frames") <= env("MAX_FRAMES").or("3").number() {
+        ""
+      } else {
+        deleted()
+      }
     interval: "${CAPTURE_INTERVAL:5s}"
 
 # ── Pipeline: Capture → 4× Infer → Structure ──────────────────
@@ -72,7 +78,7 @@ pipeline:
               headers:
                 Content-Type: application/json
               timeout: 30s
-              retries: 1
+              retries: 0
         result_map: |
           root.detect = {
             "raw": this.choices.index(0).message.content,
@@ -111,7 +117,7 @@ pipeline:
               headers:
                 Content-Type: application/json
               timeout: 30s
-              retries: 1
+              retries: 0
         result_map: |
           root.read_text = {
             "raw": this.choices.index(0).message.content,
@@ -150,7 +156,7 @@ pipeline:
               headers:
                 Content-Type: application/json
               timeout: 30s
-              retries: 1
+              retries: 0
         result_map: |
           root.describe = {
             "raw": this.choices.index(0).message.content,
@@ -189,7 +195,7 @@ pipeline:
               headers:
                 Content-Type: application/json
               timeout: 30s
-              retries: 1
+              retries: 0
         result_map: |
           root.safety = {
             "raw": this.choices.index(0).message.content,
