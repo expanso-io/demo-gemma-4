@@ -1,6 +1,6 @@
 # Gemma 4 × Expanso Edge — Multi-Modal Vision at the Edge
 
-Turn any webcam into a structured data source. One frame, four analyses — object detection, OCR, scene description, and safety judgment — all running on a $200 Jetson at the edge.
+Built off potential user requirements for embedded multi-modal edge vision: turn any webcam into a structured data source with four local on-device analyses — object detection, OCR, scene description, and safety judgment — running on a $200 Jetson at the edge without cloud video backhaul.
 
 ```
 ┌─────────┐    ┌──────────────────────────────────────────┐    ┌─────────────┐

@@ -1,7 +1,6 @@
 # Recording script — Gemma 4 × Expanso Edge (60 seconds)
 
-> **Draft.** The opening beat is rebuilt from customer language — see
-> `2026-08-20-demo-design-review/external-triangulation.md`. Message and beats derived from this repo's README and pipeline.
+> **Draft.** The opening beat is built off potential user requirements for embedded multi-modal vision at the edge. Message and beats derived from this repo's README and pipeline.
 > The audience line is a guess — correct it before recording.
 
 **For:** vision and multi-modal conversations, Google/Gemma partner slots, booth
