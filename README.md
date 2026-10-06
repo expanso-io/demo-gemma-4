@@ -83,12 +83,12 @@ record.
 ## Deploy with Expanso Cloud
 
 On the Jetson, install the model server and the `hardware=nvidia-jetson` node
-label, then install the systemd units:
+label, then install the systemd units and start the stack:
 
 ```bash
-./scripts/setup-jetson.sh
-./scripts/demo-ctl install
-./scripts/demo-ctl start
+just setup-jetson
+just up jetson
+just down jetson
 ```
 
 From an authenticated operator machine, validate and deploy the generated job:
@@ -262,7 +262,7 @@ Requires a GPU with 16GB+ VRAM (Colab T4 works). Uses [Unsloth](https://github.c
 
 ```bash
 scp gemma4-demo-tuned/*.gguf jetson:~/models/gemma4-demo/
-./scripts/demo-ctl restart
+just restart jetson   # on the Jetson
 ```
 
 See [`docs/hetzner-finetune-session.md`](docs/hetzner-finetune-session.md) for a complete fine-tuning session log with architecture, hyperparameters, and results.

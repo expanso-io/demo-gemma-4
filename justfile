@@ -3,8 +3,38 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 _default:
     @just --list
 
+# Start the demo: target=mac (this machine) or target=jetson (systemd stack).
+up target="mac":
+    @just _up-{{target}}
+
+# Stop the demo started by up with the same target.
+down target="mac":
+    @just _down-{{target}}
+
+# Restart the demo: target=mac (down then up) or target=jetson (systemd stack).
+restart target="mac":
+    @just _restart-{{target}}
+
+# One-time Jetson setup: model server, node label, systemd units.
+setup-jetson:
+    ./scripts/setup-jetson.sh
+    ./scripts/demo-ctl install
+
+_up-jetson:
+    ./scripts/demo-ctl start
+
+_down-jetson:
+    ./scripts/demo-ctl stop
+
+_restart-jetson:
+    ./scripts/demo-ctl restart
+
+_restart-mac:
+    just _down-mac
+    just _up-mac
+
 # Start inference server (if none answers), dashboard on :9090, and pipeline.
-up:
+_up-mac:
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ -f .env ]]; then set -a; source .env; set +a; fi
@@ -31,8 +61,8 @@ up:
     fi
     echo "dashboard on http://localhost:${PORT:-9090} (just down stops everything)"
 
-# Stop everything up started and fail unless its ports are free.
-down:
+# Stop everything _up-mac started and fail unless its ports are free.
+_down-mac:
     #!/usr/bin/env bash
     set -uo pipefail
     if [[ -f .env ]]; then set -a; source .env; set +a; fi
