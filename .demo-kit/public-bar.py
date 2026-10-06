@@ -51,7 +51,7 @@ from bs4 import BeautifulSoup
 from jsonschema import Draft202012Validator
 
 
-PUBLIC_BAR_VERSION = "1.1.2"
+PUBLIC_BAR_VERSION = "1.1.3"
 CRITERIA = {
     1: "Runs",
     2: "Platform",
@@ -70,6 +70,7 @@ SKIP_PARTS = {
     "artifacts",
     "test-results",
     "__pycache__",
+    ".demo-kit",
 }
 PLATFORM_TERMS = {
     "kubernetes": re.compile(r"\bkubernetes\b|\bk8s\b", re.I),
@@ -182,11 +183,15 @@ def tracked_files(repo: Path) -> list[Path]:
         ["git", "-C", str(repo), "ls-files", "-z"], capture_output=True
     )
     if result.returncode == 0 and result.stdout:
-        return [repo / os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
+        paths = [repo / os.fsdecode(raw) for raw in result.stdout.split(b"\0") if raw]
+    else:
+        paths = [path for path in repo.rglob("*") if path.is_file()]
+    # The vendored checker and its deliberately failing selftest fixtures live
+    # in .demo-kit/; they are tooling, not the repo's published content.
     return [
         path
-        for path in repo.rglob("*")
-        if path.is_file() and not any(part in SKIP_PARTS for part in path.parts)
+        for path in paths
+        if not any(part in SKIP_PARTS for part in path.relative_to(repo).parts)
     ]
 
 

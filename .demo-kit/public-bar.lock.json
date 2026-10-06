@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "public_bar_version": "1.1.2",
-  "kit_commit": "8ddf084024fa638f888c74c1bff2358eb67d8601",
+  "public_bar_version": "1.1.3",
+  "kit_commit": "2b2fac927f2c8eb39d6e15cb00d06cc2ffb6cbfe",
   "files": {
-    ".demo-kit/public-bar.py": "8c26cf94244f08e0c9d090d67fb1fea9c3fefc52f0514af018ead30d3a8311b8",
+    ".demo-kit/public-bar.py": "e6435712ce603f6f67f2f4610ebc57e7ab49fe35df53bfb41c8a9915f3186f59",
     ".demo-kit/public-bar.schema.json": "8d12511befede3fb3cc56d54dba180bd3a783398a42a3fcbcf4d7ce5da98099a",
     ".demo-kit/public-features.schema.json": "14d422103a6eb687945f064952166fa1fa58256d53a2ac2503e5d5429995a62f",
-    ".github/workflows/public-bar.yml": "259a8a7ee9ce201f5cbe388c7ed02a862567f8cc3ef0a600f2b3cd4215ac571c",
+    ".github/workflows/public-bar.yml": "5e87b1c9b2d5f8d038b41c54f497d885c7c2991f38379b2ea1252212503ae2a6",
     ".demo-kit/tests/fixtures/public-bar/bin/expanso-cli": "ed37a06c4ce92026d19b4755b284a9df1707185b3109f0c33c06a93e9fe19bc7",
     ".demo-kit/tests/fixtures/public-bar/bin/expanso-edge": "8f734a63b8b2dba176c721fc983eb13747f33ecbb5dbd9ed5b917059bc33a9a3",
     ".demo-kit/tests/fixtures/public-bar/bin/fixture-sidecar.py": "c9a666c03ebbe16a43f3e1dc7bff68fb39c7fd3c9dec06c9c3b6658d00457db8",
