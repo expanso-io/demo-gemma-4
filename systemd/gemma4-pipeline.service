@@ -1,5 +1,5 @@
 [Unit]
-Description=Gemma 4 Vision Pipeline (Expanso Edge)
+Description=Expanso Edge Agent for Gemma 4 Vision
 After=gemma4-server.service
 Requires=gemma4-server.service
 # Pipeline is useless without the inference server
@@ -21,7 +21,7 @@ ExecStartPre=/bin/bash -c '\
     curl -sf http://localhost:8081/health || \
     { echo "Inference server not healthy"; exit 1; }'
 
-ExecStart=/usr/local/bin/expanso-edge run pipeline.yaml
+ExecStart=/home/daaronch/demo-gemma-4/scripts/run-edge.sh
 
 Restart=on-failure
 RestartSec=15

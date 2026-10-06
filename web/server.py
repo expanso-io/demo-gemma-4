@@ -273,6 +273,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 content_type = "text/css"
             elif name.endswith(".js"):
                 content_type = "application/javascript"
+            elif name.endswith(".json"):
+                content_type = "application/json"
             else:
                 content_type = "application/octet-stream"
         with open(fpath, "rb") as f:
@@ -297,6 +299,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             sse_clients.append(q)
 
         try:
+            for detection in reversed(recent_detections[-10:]):
+                self.wfile.write(
+                    f"data: {json.dumps(detection)}\n\n".encode()
+                )
+            self.wfile.flush()
+
             while True:
                 try:
                     msg = q.get(timeout=5)

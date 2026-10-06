@@ -1,0 +1,149 @@
+{
+  "run_date": "2026-10-05",
+  "source": "bounded Expanso Edge fixture run",
+  "stages": [
+    {
+      "id": "capture",
+      "name": "Capture",
+      "summary": "A non-empty trigger becomes one JPEG frame envelope.",
+      "input": {
+        "trigger": "capture",
+        "source": "Gemma-Short.gif",
+        "width": 320,
+        "height": 240
+      },
+      "output": {
+        "encoding": "image/jpeg;base64",
+        "frame_sha256": "7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a"
+      }
+    },
+    {
+      "id": "detect",
+      "name": "Detect",
+      "summary": "The local vision endpoint classifies the allowed object labels.",
+      "input": {
+        "model": "gemma4",
+        "image_ref": "sha256:7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "prompt": "Which of these objects are actually visible: person, box, bottle, sign?"
+      },
+      "output": {
+        "labels": [
+          "person",
+          "bottle"
+        ],
+        "count": 2,
+        "tokens": 2
+      }
+    },
+    {
+      "id": "read",
+      "name": "Read",
+      "summary": "The same frame is sent to the local endpoint for text extraction.",
+      "input": {
+        "model": "gemma4",
+        "image_ref": "sha256:7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "prompt": "Read all text visible in this image."
+      },
+      "output": {
+        "text": "GEMMA 4",
+        "tokens": 2
+      }
+    },
+    {
+      "id": "describe",
+      "name": "Describe",
+      "summary": "The local endpoint returns one sentence about the frame.",
+      "input": {
+        "model": "gemma4",
+        "image_ref": "sha256:7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "prompt": "Describe this scene in one sentence, 15 words max."
+      },
+      "output": {
+        "summary": "A person holds a bottle beside an edge camera.",
+        "tokens": 9
+      }
+    },
+    {
+      "id": "safety",
+      "name": "Safety",
+      "summary": "The fourth local request returns a bounded safety judgment.",
+      "input": {
+        "model": "gemma4",
+        "image_ref": "sha256:7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "prompt": "Is this scene safe? Reply: safe OR alert: [reason]."
+      },
+      "output": {
+        "safe": true,
+        "risk": 1,
+        "detail": "safe",
+        "tokens": 1
+      }
+    },
+    {
+      "id": "schema",
+      "name": "Schema",
+      "summary": "Bloblang assembles the four responses into one typed envelope.",
+      "input": {
+        "detect": [
+          "person",
+          "bottle"
+        ],
+        "read_text": "GEMMA 4",
+        "describe": "A person holds a bottle beside an edge camera.",
+        "safety": "safe"
+      },
+      "output": {
+        "node_id": "public-bar-fixture",
+        "pipeline_version": "2.0.0",
+        "model": "gemma4-e2b-q4",
+        "mode": "multi",
+        "total_tokens": 14,
+        "integrity": {
+          "frame_sha256": "7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a"
+        }
+      }
+    },
+    {
+      "id": "attest",
+      "name": "Attest",
+      "summary": "The pipeline binds the frame digest, transform, and executor to the output.",
+      "input": {
+        "frame_sha256": "7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "record_count": 4,
+        "executor": "expanso-edge://public-bar-fixture"
+      },
+      "output": {
+        "_type": "https://in-toto.io/Statement/v1",
+        "predicateType": "https://makoto.dev/transform/v1",
+        "subject": {
+          "digest": {
+            "sha256": "7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+            "recordCount": "4"
+          }
+        },
+        "transform": {
+          "name": "multi-modal",
+          "version": "2.0.0"
+        }
+      }
+    },
+    {
+      "id": "fanout",
+      "name": "Fan-out",
+      "summary": "The same envelope reaches all three configured outputs.",
+      "input": {
+        "envelope_sha256": "7d02cb288f1b8d5301ecee6eaf3858ef747217ced92657aec36de7f63b76c82a",
+        "mode": "fan_out"
+      },
+      "output": {
+        "stdout": "accepted",
+        "jsonl": ".runtime/public-bar/output.jsonl",
+        "dashboard_http": {
+          "path": "/api/detection",
+          "status": 200,
+          "receipt_matches_file": true
+        }
+      }
+    }
+  ]
+}

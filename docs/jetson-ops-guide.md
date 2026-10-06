@@ -70,7 +70,7 @@ cd ~/demo-gemma-4
 ### What `demo-ctl start` does
 1. **Preflight** — checks for conflicting processes (Ollama, stray llama-servers), verifies model files exist
 2. **Starts gemma4-server** — loads GGUF into GPU, waits for health endpoint
-3. **Starts gemma4-pipeline** — Expanso Edge running pipeline.yaml (depends on server)
+3. **Starts gemma4-pipeline** — Expanso Edge receives the Cloud-scheduled job (depends on server)
 4. **Starts gemma4-dashboard** — Web UI on :9090
 5. **Starts gemma4-watchdog** — Monitors health + swap thrashing, auto-restarts if needed
 

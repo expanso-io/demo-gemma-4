@@ -10,6 +10,7 @@ import os
 import subprocess
 
 import pytest
+import yaml
 
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN_SCRIPT = os.path.join(SCRIPT_DIR, "run.sh")
@@ -104,6 +105,44 @@ class TestBannerOutput:
     def test_python_checks_run_through_uv(self, script_content):
         assert "uv run -- python" in script_content
         assert "pip install" not in script_content
+
+
+class TestJetsonCloudAgent:
+    """Keep the Jetson service aligned with the Cloud job selector."""
+
+    def test_jetson_label_matches_job_selector(self):
+        labels_path = os.path.join(SCRIPT_DIR, "config", "jetson-labels.yaml")
+        with open(labels_path) as labels_file:
+            labels = yaml.safe_load(labels_file)
+
+        assert labels["labels"]["hardware"] == "nvidia-jetson"
+
+    def test_setup_installs_owner_only_edge_label_config(self):
+        setup_path = os.path.join(SCRIPT_DIR, "scripts", "setup-jetson.sh")
+        with open(setup_path) as setup_file:
+            setup = setup_file.read()
+
+        assert 'EDGE_CONFIG_DIR="${PROJECT_ROOT}/.edge/config.d"' in setup
+        assert "install -m 600" in setup
+        assert '"${PROJECT_ROOT}/config/jetson-labels.yaml"' in setup
+
+    def test_systemd_runs_cloud_connected_edge_agent(self):
+        service_path = os.path.join(
+            SCRIPT_DIR, "systemd", "gemma4-pipeline.service"
+        )
+        with open(service_path) as service_file:
+            service = service_file.read()
+
+        assert "ExecStart=/home/daaronch/demo-gemma-4/scripts/run-edge.sh" in service
+        assert "ExecStart=/home/daaronch/demo-gemma-4/run.sh" not in service
+
+    def test_edge_launcher_loads_project_config_without_local_mode(self):
+        launcher_path = os.path.join(SCRIPT_DIR, "scripts", "run-edge.sh")
+        with open(launcher_path) as launcher_file:
+            launcher = launcher_file.read()
+
+        assert '--config "${EDGE_DIR}/config.d"' in launcher
+        assert "--local" not in launcher
 
 
 class TestShellScriptSyntax:

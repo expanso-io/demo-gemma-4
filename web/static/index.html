@@ -8,28 +8,54 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg-base: #141414;
-      --bg-surface: #1c1c1c;
-      --bg-elevated: #242424;
-      --border: rgba(255,255,255,0.08);
-      --border-active: rgba(255,255,255,0.15);
-      --text-primary: #f1f5f9;
-      --text-secondary: #9f9f9f;
-      --text-dim: rgba(255,255,255,0.4);
-      --violet: #9259ED;
-      --violet-dim: rgba(146,89,237,0.15);
-      --blue: #0055FF;
-      --blue-dim: rgba(0,85,255,0.15);
-      --ice: #33CCFF;
-      --ice-dim: rgba(51,204,255,0.15);
-      --green: #52CD42;
-      --green-dim: rgba(82,205,66,0.15);
-      --red: #FF4A0E;
-      --red-dim: rgba(255,74,14,0.15);
-      --orange: #ff9f0a;
+      color-scheme: light;
+      --bg-base: #f2eee6;
+      --bg-surface: #fbf8f2;
+      --bg-elevated: #e7e1d7;
+      --border: #c9c0b2;
+      --border-active: #8d7ca6;
+      --text-primary: #1f252c;
+      --text-secondary: #4d5661;
+      --text-dim: #626d79;
+      --violet: #6237a6;
+      --violet-dim: #e7dcf3;
+      --blue: #154f9e;
+      --blue-dim: #dbe7f5;
+      --ice: #006b76;
+      --ice-dim: #d4e9e8;
+      --green: #216e39;
+      --green-dim: #dcebdc;
+      --red: #a92b20;
+      --red-dim: #f3ddd8;
+      --on-red: #fff7f2;
+      --orange: #925100;
       --radius: 4px;
       --font-sans: 'Figtree', system-ui, sans-serif;
       --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg-base: #141414;
+      --bg-surface: #1c1c1c;
+      --bg-elevated: #292929;
+      --border: #464646;
+      --border-active: #85709e;
+      --text-primary: #f1f5f9;
+      --text-secondary: #c0c7d1;
+      --text-dim: #9aa4b2;
+      --violet: #b88cff;
+      --violet-dim: #322541;
+      --blue: #78a7ff;
+      --blue-dim: #20344f;
+      --ice: #67d6f4;
+      --ice-dim: #183943;
+      --green: #71d27b;
+      --green-dim: #203b28;
+      --red: #ff8066;
+      --red-dim: #482820;
+      --on-red: #141414;
+      --orange: #ffc266;
     }
 
     html { font-size: 16px; }
@@ -39,6 +65,7 @@
       color: var(--text-primary);
       line-height: 1.6;
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     .shell {
@@ -86,6 +113,19 @@
       gap: 16px;
     }
 
+    .theme-toggle {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      padding: 6px 10px;
+      font: 500 13px var(--font-sans);
+      cursor: pointer;
+    }
+    .theme-toggle:hover,
+    .theme-toggle:focus-visible { border-color: var(--border-active); }
+
     .gemma-brand {
       font-family: var(--font-sans);
       font-size: 14px;
@@ -99,7 +139,7 @@
 
     .cycle-badge {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-secondary);
       background: var(--bg-elevated);
       padding: 4px 10px;
@@ -118,7 +158,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-secondary);
     }
     .cycle-timer .bar-track {
@@ -164,7 +204,7 @@
     }
 
     .metric-label {
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -203,7 +243,7 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      background: #000;
+      background: #101010;
     }
 
     .live-badge {
@@ -211,13 +251,13 @@
       top: 10px;
       left: 10px;
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
       letter-spacing: 0.08em;
       padding: 3px 8px;
       border-radius: var(--radius);
       background: var(--red);
-      color: #fff;
+      color: var(--on-red);
       animation: pulse-rec 1.5s ease-in-out infinite;
     }
 
@@ -259,7 +299,7 @@
     }
 
     .mode-tag {
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -274,7 +314,7 @@
 
     .mode-meta {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 13px;
       color: var(--text-dim);
     }
 
@@ -390,6 +430,9 @@
       overflow: hidden;
     }
     .attestation-toggle {
+      width: 100%;
+      border: 0;
+      background: transparent;
       font-size: 13px;
       color: var(--text-secondary);
       cursor: pointer;
@@ -400,8 +443,7 @@
       user-select: none;
     }
     .attestation-toggle:hover { color: var(--text-primary); }
-    .attestation-toggle .arrow { transition: transform 100ms; }
-    .attestation-toggle.open .arrow { transform: rotate(90deg); }
+    .attestation-toggle .arrow { color: var(--violet); }
 
     .attestation-body {
       display: none;
@@ -411,7 +453,7 @@
 
     .json-output {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.5;
       color: var(--text-primary);
       white-space: pre-wrap;
@@ -438,18 +480,19 @@
       padding: 10px 16px; border-bottom: 1px solid var(--border);
     }
     .history-header span {
-      font-size: 11px; font-weight: 500; text-transform: uppercase;
+      font-size: 13px; font-weight: 500; text-transform: uppercase;
       letter-spacing: 0.05em; color: var(--text-secondary);
     }
     .history-list { overflow: hidden; }
     .history-row {
-      display: grid; grid-template-columns: 80px 1fr 1fr 80px;
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1.4fr) 80px;
       gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border);
-      font-family: var(--font-mono); font-size: 12px; align-items: center;
+      font-family: var(--font-mono); font-size: 13px; align-items: center;
     }
     .history-row:hover { background: var(--bg-elevated); }
     .history-row .time { color: var(--text-dim); }
-    .history-row .labels { color: var(--violet); }
+    .history-row .labels { color: var(--violet); overflow-wrap: anywhere; }
     .history-row .desc { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .history-row .ms { color: var(--text-dim); text-align: right; }
     .history-empty { padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
@@ -457,6 +500,7 @@
     /* ── Tabs ──────────────────────────── */
     .tab-bar {
       display: flex;
+      flex-wrap: wrap;
       gap: 0;
       border-bottom: 1px solid var(--border);
       margin-bottom: 16px;
@@ -482,6 +526,135 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
+    /* ── Stage Explorer ───────────────────── */
+    .explorer {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 32px 0;
+    }
+    .explorer-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .explorer-heading h2 {
+      font-size: clamp(24px, 5vw, 34px);
+      line-height: 1.15;
+      margin-bottom: 6px;
+    }
+    .explorer-heading p {
+      color: var(--text-secondary);
+      max-width: 620px;
+    }
+    .explorer-count {
+      color: var(--text-secondary);
+      font: 500 13px var(--font-mono);
+      white-space: nowrap;
+    }
+    .stage-rail {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 2px 10px;
+      scrollbar-width: thin;
+    }
+    .stage-dot {
+      min-width: 42px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font: 500 13px var(--font-mono);
+      cursor: pointer;
+    }
+    .stage-dot[aria-current="step"] {
+      background: var(--violet-dim);
+      border-color: var(--violet);
+      color: var(--violet);
+    }
+    .stage-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      padding: clamp(14px, 3vw, 24px);
+    }
+    .stage-title-row {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .stage-title-row h3 { font-size: 20px; margin-bottom: 4px; }
+    .stage-title-row p { color: var(--text-secondary); }
+    .stage-id {
+      color: var(--violet);
+      font: 600 13px var(--font-mono);
+      white-space: nowrap;
+    }
+    .stage-io {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }
+    .io-panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-base);
+      overflow: hidden;
+    }
+    .io-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px;
+      color: var(--text-secondary);
+      font: 600 13px var(--font-sans);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .io-panel pre {
+      max-width: 100%;
+      overflow: auto;
+      padding: 12px;
+      color: var(--text-primary);
+      font: 13px/1.55 var(--font-mono);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .stage-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .stage-action {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      padding: 6px 10px;
+      font: 500 13px var(--font-sans);
+      cursor: pointer;
+    }
+    .stage-action:hover,
+    .stage-action:focus-visible { border-color: var(--violet); }
+    .stage-action:disabled { opacity: 0.45; cursor: not-allowed; }
+    .control-status {
+      min-height: 18px;
+      color: var(--green);
+      font: 500 13px var(--font-sans);
+    }
+    .control-status.error { color: var(--red); }
+
     /* ── Architecture Tab ──────────────── */
     .arch-hero {
       text-align: center;
@@ -493,7 +666,7 @@
       line-height: 1.2;
       margin-bottom: 8px;
     }
-    .arch-hero h2 .gemma { color: #4285F4; }
+    .arch-hero h2 .gemma { color: var(--blue); }
     .arch-hero h2 .edge { color: var(--violet); }
     .arch-hero p {
       font-size: 15px;
@@ -522,11 +695,13 @@
     }
     .arch-node.highlight {
       border-color: rgba(66,133,244,0.4);
-      background: linear-gradient(180deg, rgba(66,133,244,0.06) 0%, var(--bg-surface) 100%);
+      background: var(--blue-dim);
     }
 
     .arch-node-icon {
-      font-size: 24px;
+      font: 600 13px var(--font-mono);
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
       margin-bottom: 8px;
       display: block;
     }
@@ -535,18 +710,19 @@
       font-weight: 600;
       margin-bottom: 4px;
     }
-    .arch-node.highlight .arch-node-title { color: #4285F4; }
+    .arch-node.highlight .arch-node-title { color: var(--blue); }
     .arch-node-sub {
-      font-size: 11px;
+      font-size: 13px;
       font-family: var(--font-mono);
       color: var(--text-dim);
     }
+    .arch-node.highlight .arch-node-sub { color: var(--text-secondary); }
 
     .arch-arrow {
-      color: var(--text-dim);
-      font-size: 18px;
-      padding: 0 4px;
-      text-align: center;
+      width: 28px;
+      height: 1px;
+      background: var(--border-active);
+      margin: 0 4px;
     }
 
     .arch-details {
@@ -560,7 +736,7 @@
     @media (max-width: 700px) {
       .arch-details { grid-template-columns: 1fr; }
       .arch-flow { grid-template-columns: 1fr; gap: 8px; }
-      .arch-arrow { transform: rotate(90deg); }
+      .arch-arrow { width: 1px; height: 18px; margin: 0 auto; }
     }
 
     .arch-detail-card {
@@ -583,7 +759,7 @@
 
     .arch-detail-card table {
       width: 100%;
-      font-size: 12px;
+      font-size: 13px;
       font-family: var(--font-mono);
       border-collapse: collapse;
     }
@@ -597,6 +773,7 @@
     }
     .arch-detail-card td:last-child {
       color: var(--text-primary);
+      overflow-wrap: anywhere;
     }
     .arch-detail-card tr:last-child td { border-bottom: none; }
 
@@ -635,14 +812,14 @@
       margin-bottom: 4px;
     }
     .arch-mode-desc {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.5;
     }
     .arch-mode-prompt {
       font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-dim);
+      font-size: 13px;
+      color: var(--text-secondary);
       margin-top: 8px;
       padding: 6px 8px;
       background: var(--bg-elevated);
@@ -660,15 +837,34 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-dim);
       font-family: var(--font-mono);
     }
     .footer a {
       color: var(--violet);
-      text-decoration: none;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
     .footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 560px) {
+      .shell { padding: 12px; }
+      .header { align-items: flex-start; gap: 10px; }
+      .header-right { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+      .gemma-brand { display: none; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric { min-width: 0; padding: 9px 10px; }
+      .metric-value { overflow-wrap: anywhere; }
+      .cycle-timer { flex-wrap: wrap; padding: 8px 10px; }
+      .cycle-timer .timer-label { min-width: 0; width: calc(100% - 62px); }
+      .cycle-timer .bar-track { order: 3; flex-basis: 100%; }
+      .history-row { grid-template-columns: 62px minmax(0, 1fr) 58px; padding: 8px 10px; }
+      .history-row .desc { display: none; }
+      .stage-io { grid-template-columns: 1fr; }
+      .explorer-heading, .stage-title-row { align-items: flex-start; flex-direction: column; }
+      .footer { flex-wrap: wrap; gap: 6px 12px; }
+    }
   </style>
   <link rel="stylesheet" href="fonts/fonts.css">
 </head>
@@ -684,17 +880,27 @@
       <div class="header-right">
         <span class="gemma-brand">Powered by <strong>Google Gemma 4</strong></span>
         <span class="cycle-badge" id="cycleBadge">waiting</span>
+        <button class="theme-toggle" id="themeToggle" type="button">
+          Dark mode
+        </button>
       </div>
     </header>
 
     <!-- Tabs -->
-    <div class="tab-bar">
-      <button class="tab-btn active" onclick="switchTab('live')">Live</button>
-      <button class="tab-btn" onclick="switchTab('arch')">Architecture</button>
+    <div class="tab-bar" role="tablist" aria-label="Demo views">
+      <button class="tab-btn active" id="tab-button-live" role="tab"
+        data-tab="live" aria-controls="tab-live" aria-selected="true">Live</button>
+      <button class="tab-btn" id="tab-button-explorer" role="tab"
+        data-tab="explorer" aria-controls="tab-explorer"
+        aria-selected="false">Explorer</button>
+      <button class="tab-btn" id="tab-button-arch" role="tab"
+        data-tab="arch" aria-controls="tab-arch"
+        aria-selected="false">Architecture</button>
     </div>
 
     <!-- ═══ LIVE TAB ═══ -->
-    <div class="tab-content active" id="tab-live">
+    <div class="tab-content active" id="tab-live" role="tabpanel"
+      aria-labelledby="tab-button-live">
 
     <!-- Cycle Timer -->
     <div class="cycle-timer">
@@ -755,9 +961,10 @@
 
     <!-- Attestation -->
     <div class="attestation-bar">
-      <div class="attestation-toggle" id="attestationToggle" onclick="toggleAttestation()">
-        <span class="arrow">▸</span> Makoto L1 Provenance Attestation
-      </div>
+      <button class="attestation-toggle" id="attestationToggle" type="button"
+        aria-expanded="false" onclick="toggleAttestation()">
+        <span class="arrow">Show</span> Makoto L1 Provenance Attestation
+      </button>
       <div class="attestation-body" id="attestationBody">
         <div class="json-output" id="attestationJson"></div>
       </div>
@@ -778,36 +985,58 @@
 
     </div><!-- /tab-live -->
 
+    <!-- ═══ EXPLORER TAB ═══ -->
+    <div class="tab-content" id="tab-explorer" role="tabpanel"
+      aria-labelledby="tab-button-explorer">
+      <section class="explorer" id="stageExplorer" aria-labelledby="explorerTitle">
+        <div class="explorer-heading">
+          <div>
+            <h2 id="explorerTitle">Trace one frame through the pipeline.</h2>
+            <p>
+              Each page shows the recorded input and output from the bounded
+              Expanso Edge verification run.
+            </p>
+          </div>
+          <span class="explorer-count" id="explorerCount">Loading stages</span>
+        </div>
+        <nav class="stage-rail" id="stageRail" aria-label="Pipeline stages"></nav>
+        <article class="stage-card" id="stageCard" aria-live="polite">
+          <p>Loading the verification record...</p>
+        </article>
+      </section>
+    </div><!-- /tab-explorer -->
+
     <!-- ═══ ARCHITECTURE TAB ═══ -->
-    <div class="tab-content" id="tab-arch">
+    <div class="tab-content" id="tab-arch" role="tabpanel"
+      aria-labelledby="tab-button-arch">
 
       <div class="arch-hero">
         <h2>One Frame. Four <span class="gemma">Gemma 4</span> Analyses.<br>Shipped by <span class="edge">Expanso Edge</span>.</h2>
-        <p>Every frame passes through four parallel inference modes, gets structured into a typed schema, signed with a provenance attestation, and fanned out to any destination.</p>
+        <p>Every frame passes through four sequential inference modes, gets structured into a typed schema, receives a provenance attestation, and fans out to three configured outputs.</p>
       </div>
 
       <!-- Pipeline Flow -->
       <div class="arch-flow">
         <div class="arch-node">
-          <span class="arch-node-icon">&#9673;</span>
+          <span class="arch-node-icon">FRAME</span>
           <div class="arch-node-title">Camera</div>
           <div class="arch-node-sub">RTSP / USB</div>
         </div>
-        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-arrow" aria-hidden="true"></div>
         <div class="arch-node">
-          <span class="arch-node-icon">&#9649;</span>
+          <span class="arch-node-icon">EDGE</span>
           <div class="arch-node-title">Expanso Edge</div>
           <div class="arch-node-sub">pipeline.yaml</div>
         </div>
-        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-arrow" aria-hidden="true"></div>
         <div class="arch-node highlight">
-          <span class="arch-node-icon">&#11042;</span>
+          <span class="arch-node-icon">MODEL</span>
           <div class="arch-node-title">Gemma 4</div>
           <div class="arch-node-sub">4&times; inference / frame</div>
         </div>
-        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-arrow" aria-hidden="true"></div>
         <div class="arch-node">
-          <span class="arch-node-icon">&#9881;</span>
+          <span class="arch-node-icon">JSON</span>
           <div class="arch-node-title">Structured Output</div>
           <div class="arch-node-sub">JSON + Makoto L1</div>
         </div>
@@ -816,7 +1045,7 @@
       <!-- Detail Cards -->
       <div class="arch-details">
         <div class="arch-detail-card">
-          <h3><span class="dot" style="background:#4285F4"></span> Gemma 4 E2B</h3>
+          <h3><span class="dot" style="background:var(--blue)"></span> Gemma 4 E2B</h3>
           <table>
             <tr><td>Model</td><td>gemma-4-E2B-it Q4_K_M</td></tr>
             <tr><td>Parameters</td><td>2 billion</td></tr>
@@ -834,18 +1063,18 @@
             <tr><td>Schema</td><td>Bloblang mapping</td></tr>
             <tr><td>Integrity</td><td>SHA-256 per frame</td></tr>
             <tr><td>Provenance</td><td>Makoto L1 / in-toto</td></tr>
-            <tr><td>Outputs</td><td>stdout, JSONL, HTTP, 69+</td></tr>
+            <tr><td>Outputs</td><td>stdout, JSONL, dashboard HTTP</td></tr>
           </table>
         </div>
         <div class="arch-detail-card">
           <h3><span class="dot" style="background:var(--green)"></span> Infrastructure</h3>
           <table>
             <tr><td>Edge device</td><td>Jetson Orin 8GB / Mac</td></tr>
-            <tr><td>Camera</td><td>Reolink (RTSP H.264)</td></tr>
+            <tr><td>Camera</td><td>RTSP / USB</td></tr>
             <tr><td>Capture</td><td>OpenCV subprocess</td></tr>
             <tr><td>Dashboard</td><td>Python HTTP + SSE</td></tr>
-            <tr><td>Cycle time</td><td>~5s (4 inferences)</td></tr>
-            <tr><td>Resolution</td><td>640&times;360 (sub stream)</td></tr>
+            <tr><td>Run cap</td><td>3 frames by default</td></tr>
+            <tr><td>Resolution</td><td>320&times;240 default capture</td></tr>
           </table>
         </div>
         <div class="arch-detail-card">
@@ -904,6 +1133,37 @@
     let lastDetectionTime = null;
     let cycleInterval = 5; // seconds — matches CAPTURE_INTERVAL
     let timerHandle = null;
+    let explorerStages = [];
+    let explorerIndex = 0;
+    const seenFrames = new Set();
+
+    // ── Theme ──────────────────────────────
+    function setTheme(theme) {
+      const resolved = theme === 'dark' ? 'dark' : 'light';
+      document.documentElement.dataset.theme = resolved;
+      const toggle = document.getElementById('themeToggle');
+      toggle.textContent = resolved === 'dark' ? 'Light mode' : 'Dark mode';
+      toggle.setAttribute('aria-label', 'Switch to ' + toggle.textContent.toLowerCase());
+      try {
+        localStorage.setItem('gemma-theme', resolved);
+      } catch (error) {
+        console.warn('Theme preference was not saved:', error);
+      }
+    }
+
+    function initTheme() {
+      let saved = 'light';
+      try {
+        saved = localStorage.getItem('gemma-theme') || 'light';
+      } catch (error) {
+        console.warn('Theme preference was not read:', error);
+      }
+      setTheme(saved);
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        setTheme(next);
+      });
+    }
 
     // ── Cycle Timer ────────────────────────
     function updateTimer() {
@@ -957,12 +1217,15 @@
 
       es.onerror = () => {
         document.getElementById('statusDot').className = 'status-dot error';
+        es.close();
         setTimeout(connectSSE, 3000);
       };
     }
 
     // ── Handle Multi-Modal Detection ───────
     function handleMultiDetection(d) {
+      if (d.frame_id && seenFrames.has(d.frame_id)) return;
+      if (d.frame_id) seenFrames.add(d.frame_id);
       cycleCount++;
       resetTimer();
 
@@ -1098,8 +1361,12 @@
     }
 
     function toggleAttestation() {
-      document.getElementById('attestationToggle').classList.toggle('open');
-      document.getElementById('attestationBody').classList.toggle('open');
+      const toggle = document.getElementById('attestationToggle');
+      const body = document.getElementById('attestationBody');
+      const open = body.classList.toggle('open');
+      toggle.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.querySelector('.arrow').textContent = open ? 'Hide' : 'Show';
     }
 
     function syntaxHighlight(json) {
@@ -1130,15 +1397,155 @@
       tmp.src = '/api/snapshot?t=' + Date.now();
     }
 
+    // ── Stage Explorer ─────────────────────
+    async function loadExplorer() {
+      const card = document.getElementById('stageCard');
+      try {
+        const response = await fetch('/static/explorer.json');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const record = await response.json();
+        explorerStages = record.stages;
+        document.getElementById('explorerCount').textContent =
+          explorerStages.length + ' stages · verified ' + record.run_date;
+        renderStageRail();
+        renderStage(0, false);
+      } catch (error) {
+        card.innerHTML = '<p class="control-status error">Explorer failed to load: ' +
+          esc(error.message) + '</p>';
+      }
+    }
+
+    function renderStageRail() {
+      const rail = document.getElementById('stageRail');
+      rail.innerHTML = '';
+      explorerStages.forEach((stage, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'stage-dot';
+        button.textContent = index + 1;
+        button.setAttribute('aria-label', (index + 1) + '. ' + stage.name);
+        button.addEventListener('click', () => renderStage(index));
+        rail.appendChild(button);
+      });
+    }
+
+    function renderStage(index, preserveScroll = true) {
+      if (!explorerStages.length) return;
+      const nextIndex = Math.max(0, Math.min(index, explorerStages.length - 1));
+      const previousScroll = window.scrollY;
+      explorerIndex = nextIndex;
+      const stage = explorerStages[explorerIndex];
+      const card = document.getElementById('stageCard');
+      const inputJson = JSON.stringify(stage.input, null, 2);
+      const outputJson = JSON.stringify(stage.output, null, 2);
+
+      document.querySelectorAll('.stage-dot').forEach((button, buttonIndex) => {
+        if (buttonIndex === explorerIndex) {
+          button.setAttribute('aria-current', 'step');
+        } else {
+          button.removeAttribute('aria-current');
+        }
+      });
+
+      card.innerHTML =
+        '<div class="stage-title-row">' +
+          '<div><h3>' + esc(stage.name) + '</h3><p>' + esc(stage.summary) + '</p></div>' +
+          '<span class="stage-id">' + esc(stage.id) + '</span>' +
+        '</div>' +
+        '<div class="stage-io">' +
+          '<section class="io-panel"><div class="io-header">Input</div>' +
+            '<pre>' + esc(inputJson) + '</pre></section>' +
+          '<section class="io-panel"><div class="io-header">Output</div>' +
+            '<pre>' + esc(outputJson) + '</pre></section>' +
+        '</div>' +
+        '<div class="stage-controls">' +
+          '<button class="stage-action" type="button" data-stage-action="previous"' +
+            (explorerIndex === 0 ? ' disabled' : '') + '>Previous</button>' +
+          '<button class="stage-action" type="button" data-stage-action="next"' +
+            (explorerIndex === explorerStages.length - 1 ? ' disabled' : '') + '>Next</button>' +
+          '<button class="stage-action" type="button" data-stage-action="copy">Copy output</button>' +
+          '<span class="control-status" id="copyStatus" aria-live="polite"></span>' +
+          '<button class="stage-action" type="button" data-stage-action="download">Download stage</button>' +
+          '<span class="control-status" id="downloadStatus" aria-live="polite"></span>' +
+        '</div>';
+
+      card.querySelector('[data-stage-action="previous"]').addEventListener(
+        'click', () => renderStage(explorerIndex - 1)
+      );
+      card.querySelector('[data-stage-action="next"]').addEventListener(
+        'click', () => renderStage(explorerIndex + 1)
+      );
+      card.querySelector('[data-stage-action="copy"]').addEventListener(
+        'click', () => copyStageOutput(outputJson)
+      );
+      card.querySelector('[data-stage-action="download"]').addEventListener(
+        'click', () => downloadStage(stage)
+      );
+
+      if (preserveScroll) window.scrollTo(0, previousScroll);
+    }
+
+    async function copyStageOutput(outputJson) {
+      const status = document.getElementById('copyStatus');
+      status.className = 'control-status';
+      try {
+        await navigator.clipboard.writeText(outputJson);
+        status.textContent = 'Copied';
+      } catch (error) {
+        status.classList.add('error');
+        status.textContent = 'Copy failed';
+      }
+    }
+
+    function downloadStage(stage) {
+      const status = document.getElementById('downloadStatus');
+      status.className = 'control-status';
+      try {
+        const blob = new Blob([JSON.stringify(stage, null, 2) + '\n'], {
+          type: 'application/json'
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'gemma4-stage-' + stage.id + '.json';
+        link.click();
+        URL.revokeObjectURL(url);
+        status.textContent = 'Download started';
+      } catch (error) {
+        status.classList.add('error');
+        status.textContent = 'Download failed';
+      }
+    }
+
     // ── Tab Switching ──────────────────────
     function switchTab(tab) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(button => {
+        const active = button.dataset.tab === tab;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.querySelector('[onclick="switchTab(\'' + tab + '\')"]').classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
     }
 
     // ── Init ───────────────────────────────
+    initTheme();
+    document.querySelectorAll('.tab-btn').forEach(button => {
+      button.addEventListener('click', () => switchTab(button.dataset.tab));
+    });
+    document.addEventListener('keydown', event => {
+      if (!document.getElementById('tab-explorer').classList.contains('active')) return;
+      if (event.target.matches('input, textarea, select')) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        renderStage(explorerIndex - 1);
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        renderStage(explorerIndex + 1);
+      }
+    });
+    loadExplorer();
     connectSSE();
     setTimeout(() => {
       refreshLive();

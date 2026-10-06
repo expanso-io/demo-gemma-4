@@ -22,6 +22,7 @@
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # ── Configuration ──────────────────────────────────
 MODEL_DIR="${HOME}/models/gemma4-demo"
@@ -31,6 +32,7 @@ MODEL_FILE="gemma-4-E2B-it.Q4_K_M.gguf"
 MMPROJ_FILE="gemma-4-E2B-it.BF16-mmproj.gguf"
 HF_BASE="https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main"
 PORT=8081
+EDGE_CONFIG_DIR="${PROJECT_ROOT}/.edge/config.d"
 
 # ── Functions ──────────────────────────────────────
 
@@ -89,7 +91,15 @@ test_server() {
     time curl -s "http://localhost:${PORT}/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -d '{"model":"gemma4","messages":[{"role":"user","content":"Say hello in 5 words"}],"max_tokens":20}' \
-        | python3 -m json.tool
+        | uv run -- python -m json.tool
+}
+
+configure_edge_labels() {
+    mkdir -p "${EDGE_CONFIG_DIR}"
+    install -m 600 \
+        "${PROJECT_ROOT}/config/jetson-labels.yaml" \
+        "${EDGE_CONFIG_DIR}/20-labels.yaml"
+    echo "Installed Expanso Edge labels for hardware=nvidia-jetson"
 }
 
 download_model() {
@@ -140,14 +150,16 @@ case "${1:-setup}" in
         echo ""
         pull_container
         echo ""
+        configure_edge_labels
+        echo ""
         start_server
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  Setup complete!"
         echo ""
         echo "  Inference: http://localhost:${PORT}"
-        echo "  Dashboard: python3 web/server.py"
-        echo "  Pipeline:  expanso-cli job deploy job.yaml"
+        echo "  Dashboard: uv run web/server.py"
+        echo "  Pipeline:  ./scripts/deploy.sh (from an operator machine)"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         ;;
     *)

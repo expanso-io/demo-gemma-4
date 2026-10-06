@@ -1,6 +1,8 @@
-# Gemma 4 × Expanso Edge — Multi-Modal Vision at the Edge
+# Gemma 4 × Expanso Edge: Multi-Modal Vision at the Edge
 
-Built off potential user requirements for embedded multi-modal edge vision: turn any webcam into a structured data source with four local on-device analyses — object detection, OCR, scene description, and safety judgment — running on a $200 Jetson at the edge without cloud video backhaul.
+Turn a USB or RTSP camera into structured records with four local analyses:
+object detection, OCR, scene description, and a safety judgment. Expanso Edge
+runs the pipeline beside the camera. Frames stay on the node.
 
 ```
 ┌─────────┐    ┌──────────────────────────────────────────┐    ┌─────────────┐
@@ -9,18 +11,26 @@ Built off potential user requirements for embedded multi-modal edge vision: turn
 │  Camera  │    │  capture → Gemma 4 × 4 → schema → attest│    │             │
 └─────────┘    │                                          │    │  • stdout   │
                │  1. DETECT  — object classification       │    │  • JSONL    │
-               │  2. READ    — OCR / text extraction       │    │  • HTTP     │
-               │  3. DESCRIBE — scene summary              │    │  • Kafka    │
-               │  4. SAFETY  — hazard judgment             │    │  • S3       │
-               │                                          │    │  • 69+      │
+               │  2. READ    — OCR / text extraction       │    │  • dashboard│
+               │  3. DESCRIBE — scene summary              │    │    HTTP     │
+               │  4. SAFETY  — hazard judgment             │    │             │
                └──────────────────────────────────────────┘    └─────────────┘
 ```
 
-## Quick Start
+## Step explorer
+
+Open `http://localhost:9090`, choose **Explorer**, and page through capture,
+the four inference branches, schema assembly, attestation, and fan-out. Each
+page renders the recorded JSON input and output from the bounded 2026-10-05
+Expanso Edge run in [`web/static/explorer.json`](web/static/explorer.json).
+Use the Left and Right arrow keys or the on-screen controls. Copy and download
+results appear beside the control you used.
+
+## Run locally
 
 ### Prerequisites
 
-- **[Expanso Edge](https://docs.expanso.io/getting-started/quickstart/)** — the pipeline runtime
+- **[Expanso Edge](https://docs.expanso.io/getting-started/quickstart/)** and `expanso-cli`
 - **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/)
 - **A Gemma 4 inference server** — either:
   - [llama.cpp](https://github.com/ggerganov/llama.cpp) with GGUF (recommended for Jetson)
@@ -30,7 +40,7 @@ Built off potential user requirements for embedded multi-modal edge vision: turn
 
 ```bash
 cp .env.example .env
-# Edit .env — set CAMERA_URL for IP cameras, or leave defaults for USB webcam
+# Set CAMERA_URL for an IP camera, or leave it empty for a USB camera.
 ```
 
 ### 2. Start the inference server
@@ -49,47 +59,10 @@ ollama serve
 ./run.sh
 ```
 
-Structured JSON flows to your terminal — one envelope per frame with all four analyses:
-
-```json
-{
-  "timestamp": "2026-04-07T14:23:01.482-04:00",
-  "node_id": "edge-cam-001",
-  "pipeline_version": "2.0.0",
-  "model": "gemma4-e2b-q4",
-  "frame_id": "a1b2c3d4-...",
-  "mode": "multi",
-  "detect": {
-    "labels": ["person", "bottle"],
-    "count": 2,
-    "ms": 1847,
-    "tokens": 42
-  },
-  "read_text": {
-    "text": "Dasani, Purified Water",
-    "ms": 1203,
-    "tokens": 38
-  },
-  "describe": {
-    "summary": "A person holds a water bottle at a desk",
-    "ms": 982,
-    "tokens": 35
-  },
-  "safety": {
-    "safe": true,
-    "risk": 1,
-    "detail": "safe",
-    "ms": 641,
-    "tokens": 28
-  },
-  "total_ms": 4673,
-  "total_tokens": 143,
-  "integrity": { "frame_sha256": "a7ffc6f8..." },
-  "attestation": { "_type": "https://in-toto.io/Statement/v1", "..." : "..." }
-}
-```
-
-Every detection carries a **[Makoto](https://usemakoto.dev) data provenance attestation** — proving where the frame came from, what model processed it, and which edge node ran it.
+`run.sh` starts a local Expanso Edge agent, submits the committed job, and
+writes one JSON envelope per frame to stdout and `detections/gemma4.jsonl`.
+Every envelope includes the frame digest, four analysis records, and a
+[Makoto](https://usemakoto.dev) provenance attestation.
 
 ### 4. Open the dashboard
 
@@ -98,7 +71,46 @@ uv run web/server.py
 # → http://localhost:9090
 ```
 
-The dashboard shows live camera feed, real-time Gemma 4 analysis, and detection history. It also supports **recording frames by label** for fine-tuning dataset creation.
+The dashboard shows the live feed, the current Gemma 4 result, and detection
+history. A new browser connection receives the last ten detections before live
+updates begin. The `/record` page captures frames by label for fine-tuning.
+
+### Reproduce the checked-in verification
+
+```bash
+just fixture-run
+```
+
+This bounded path runs the committed job with Expanso Edge against one frame
+from `Gemma-Short.gif`. A local fixture endpoint returns the four recorded
+responses. The assertion compares the JSONL record with the dashboard HTTP
+receipt and makes no model call. See
+[`docs/public-bar-2026-10-05.md`](docs/public-bar-2026-10-05.md) for the run
+record.
+
+## Deploy with Expanso Cloud
+
+On the Jetson, install the model server and the `hardware=nvidia-jetson` node
+label, then install the systemd units:
+
+```bash
+./scripts/setup-jetson.sh
+./scripts/demo-ctl install
+./scripts/demo-ctl start
+```
+
+From an authenticated operator machine, validate and deploy the generated job:
+
+```bash
+uv run -s scripts/render-job.py --check
+expanso-cli job validate scripts/job.yaml --offline
+./scripts/deploy.sh
+```
+
+[`scripts/job.yaml`](scripts/job.yaml) embeds the same validated pipeline and
+selects nodes with `hardware=nvidia-jetson`. The model endpoint and camera stay
+on that node. See [`docs/jetson-ops-guide.md`](docs/jetson-ops-guide.md) for
+daily service and memory operations.
 
 ### Model call boundaries
 
@@ -129,7 +141,10 @@ The entire pipeline is **one YAML file** — [`pipeline.yaml`](pipeline.yaml):
 
 **Without Expanso:** You write glue code for one model on one server with one output.
 
-**With Expanso:** You get a declarative pipeline with structured output envelopes, SHA-256 integrity hashes, data provenance attestations, and fan-out to 69+ output destinations. Add Kafka in 3 lines. Deploy to a fleet from a dashboard.
+**With Expanso:** The declarative pipeline produces a structured envelope,
+computes a SHA-256 frame digest, adds provenance, and sends the same record to
+stdout, JSONL, and the local dashboard endpoint. Expanso Cloud schedules that
+job on labeled edge nodes.
 
 ## Project Structure
 
@@ -174,7 +189,7 @@ demo-gemma-4/
 ├── prompts/                   # Prompt templates
 ├── systemd/                   # Jetson systemd services + OOM protection
 ├── docs/                      # Operational guides
-└── tests/                     # Test suite (112 tests)
+└── tests/                     # Test suite (137 tests)
 ```
 
 ## Configuration
@@ -193,49 +208,8 @@ All settings via environment variables (see [`.env.example`](.env.example)):
 | `CAPTURE_WIDTH` | `320` | Frame width (pixels) |
 | `CAPTURE_HEIGHT` | `240` | Frame height (pixels) |
 | `JPEG_QUALITY` | `70` | JPEG compression quality (1-100) |
+| `DETECTIONS_FILE` | `./detections/gemma4.jsonl` | JSONL output path |
 | `PORT` | `9090` | Dashboard web server port |
-
-## Deployment
-
-### Jetson Orin (production edge)
-
-```bash
-# One-time setup: downloads model, pulls container, starts server
-./scripts/setup-jetson.sh
-
-# Install systemd services for auto-start on boot
-./scripts/demo-ctl install
-
-# Daily operations
-./scripts/demo-ctl start      # Start full stack (server → pipeline → dashboard → watchdog)
-./scripts/demo-ctl stop       # Stop everything cleanly
-./scripts/demo-ctl status     # Health check + memory + swap + disk
-./scripts/demo-ctl doctor     # Full system diagnosis
-./scripts/demo-ctl logs       # Tail all service logs
-```
-
-See [`docs/jetson-ops-guide.md`](docs/jetson-ops-guide.md) for memory management, OOM protection, and monitoring on the 7.4GB Orin.
-
-### Mac (local development)
-
-```bash
-# Start inference server + dashboard
-./scripts/mac-demo.sh start
-
-# Deploy pipeline via Expanso Cloud
-./scripts/deploy.sh
-
-# Or run the edge agent locally
-./scripts/run-edge.sh
-```
-
-### Expanso Cloud (fleet deployment)
-
-```bash
-./scripts/deploy.sh
-```
-
-The pipeline runs on any node with the `host=mac` label. Edit [`scripts/job.yaml`](scripts/job.yaml) to change constraints.
 
 ## Fine-Tuning
 
@@ -301,9 +275,9 @@ scp gemma4-demo-tuned/*.gguf jetson:~/models/gemma4-demo/
 
 See [`docs/hetzner-finetune-session.md`](docs/hetzner-finetune-session.md) for a complete fine-tuning session log with architecture, hyperparameters, and results.
 
-## Adding Output Destinations
+## Configured outputs
 
-Expanso Edge supports 69+ output components. Add destinations in `pipeline.yaml`:
+The published pipeline fans each completed envelope to these three outputs:
 
 ```yaml
 output:
@@ -312,23 +286,16 @@ output:
     outputs:
       - stdout: {}
       - file:
-          path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
+          path: "${DETECTIONS_FILE:./detections/gemma4.jsonl}"
           codec: lines
-
-      # Add a webhook:
-      - http_client:
-          url: https://your-api.com/detections
-          verb: POST
-
-      # Add Kafka:
-      - kafka:
-          addresses: ["localhost:9092"]
-          topic: vision-detections
-
-      # Add S3:
-      - aws_s3:
-          bucket: my-detections
-          path: 'edge/${! count("s3") }.json'
+      - drop_on:
+          error: true
+          output:
+            http_client:
+              url: "${DASHBOARD_URL:http://localhost:9090}/api/detection"
+              verb: POST
+              retries: 12
+              retry_period: 500ms
 ```
 
 ## Tests
@@ -340,4 +307,4 @@ gitleaks git --no-banner
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0. See [LICENSE](LICENSE).
