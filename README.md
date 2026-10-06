@@ -189,7 +189,7 @@ demo-gemma-4/
 ├── prompts/                   # Prompt templates
 ├── systemd/                   # Jetson systemd services + OOM protection
 ├── docs/                      # Operational guides
-└── tests/                     # Test suite (137 tests)
+└── tests/                     # Test suite
 ```
 
 ## Configuration
