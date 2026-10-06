@@ -9,6 +9,7 @@ OUTPUT="${RUNTIME}/output.jsonl"
 RECEIPT="${RUNTIME}/receipt.json"
 SERVER_LOG="${RUNTIME}/fixture-server.log"
 EDGE_LOG="${RUNTIME}/edge.log"
+EDGE_DATA_DIR="${RUNTIME}/edge"
 SERVER_PID=""
 EDGE_PID=""
 
@@ -35,6 +36,11 @@ fi
 
 mkdir -p "${RUNTIME}"
 rm -f "${OUTPUT}" "${RECEIPT}" "${SERVER_LOG}" "${EDGE_LOG}"
+if [[ "${EDGE_DATA_DIR}" != "${ROOT}/.runtime/public-bar/edge" ]]; then
+    echo "refusing to clear unexpected Edge data path: ${EDGE_DATA_DIR}" >&2
+    exit 1
+fi
+rm -rf "${EDGE_DATA_DIR}"
 
 cd "${ROOT}"
 uv run -s scripts/fixture_server.py \
@@ -61,7 +67,7 @@ DETECTIONS_FILE="${OUTPUT}" \
 expanso-edge run \
     --local \
     --no-watch \
-    --data-dir "${RUNTIME}/edge" \
+    --data-dir "${EDGE_DATA_DIR}" \
     --api-listen "127.0.0.1:${EDGE_API_PORT}" \
     >"${EDGE_LOG}" 2>&1 &
 EDGE_PID=$!

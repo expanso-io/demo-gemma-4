@@ -28,3 +28,10 @@ def test_fixture_server_has_one_answer_per_inference_branch():
         "Is this scene safe",
     ):
         assert prompt in fixture_server
+
+
+def test_fixture_run_starts_from_clean_edge_state():
+    runner = (ROOT / "scripts" / "run-public-fixture.sh").read_text()
+    assert 'EDGE_DATA_DIR="${RUNTIME}/edge"' in runner
+    assert 'rm -rf "${EDGE_DATA_DIR}"' in runner
+    assert '--data-dir "${EDGE_DATA_DIR}"' in runner
