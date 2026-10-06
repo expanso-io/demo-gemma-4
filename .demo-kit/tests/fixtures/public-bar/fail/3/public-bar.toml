@@ -1,0 +1,49 @@
+version = 1
+
+[repository]
+name = "public-bar-fixture"
+published = true
+
+[web]
+document = "index.html"
+explanation_selector = "#explanation"
+explorer_selector = "#missing-explorer"
+run_selector = "#run"
+deploy_selector = "#deploy"
+
+[browser]
+url = "http://127.0.0.1:4173/"
+ready_url = "http://127.0.0.1:4173/"
+start_command = ["uv", "run", "-m", "http.server", "4173"]
+stop_command = ["true"]
+theme_toggle_selector = "#theme"
+stage_selector = "[data-stage]"
+current_stage_selector = "[data-stage][aria-current='step']"
+scroll_anchor_selector = "#explorer"
+json_selectors = []
+
+[[browser.controls]]
+id = "copy-config"
+kind = "copy"
+selector = "#copy"
+feedback_selector = "#copy-status"
+success_text = "Copied"
+failure_text = "Copy failed"
+
+[[pipelines]]
+id = "normalize"
+path = "pipelines/normalize.yaml"
+input = "fixtures/input.jsonl"
+expected = "fixtures/expected.jsonl"
+timeout_seconds = 5
+
+[[stages]]
+id = "normalize"
+pipeline = "normalize"
+selector = "[data-stage='normalize']"
+input = "fixtures/input.jsonl"
+output = "fixtures/expected.jsonl"
+
+[regressions]
+features = "public-features.json"
+removal_files = ["public-removals/*.json"]

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "features": [
+    {"id": "normalize", "description": "Inspect the normalize stage"}
+  ],
+  "routes": [
+    {"id": "home", "path": "/"}
+  ],
+  "controls": [],
+  "downloads": [],
+  "browser_assertions": [
+    {"id": "page-stages", "description": "Arrow keys page stages"}
+  ]
+}

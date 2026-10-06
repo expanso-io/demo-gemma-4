@@ -1,0 +1,42 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyyaml>=6,<7"]
+# ///
+import shutil
+import sys
+import urllib.request
+from pathlib import Path
+
+import yaml
+
+if sys.argv[1:] == ["version"]:
+    print("fixture-cli v1")
+    raise SystemExit(0)
+if len(sys.argv) >= 3 and sys.argv[1:3] == ["job", "validate"]:
+    print("valid")
+    raise SystemExit(0)
+if "health" in sys.argv:
+    print("healthy")
+    raise SystemExit(0)
+if "deploy" in sys.argv:
+    config_path = Path(sys.argv[sys.argv.index("deploy") + 1])
+    document = yaml.safe_load(config_path.read_text())
+    config = document["config"]
+    for processor in config.get("pipeline", {}).get("processors", []):
+        url = processor.get("http", {}).get("url")
+        if url:
+            try:
+                urllib.request.urlopen(url, timeout=2).read()
+            except OSError as error:
+                print(f"sidecar unreachable: {url}: {error}", file=sys.stderr)
+                raise SystemExit(1)
+    source = Path(config["input"]["file"]["paths"][0])
+    target = Path(config["output"]["file"]["path"])
+    shutil.copyfile(source, target)
+    print("deployed")
+    raise SystemExit(0)
+if "delete" in sys.argv:
+    raise SystemExit(0)
+print("unsupported fixture cli command", file=sys.stderr)
+raise SystemExit(2)

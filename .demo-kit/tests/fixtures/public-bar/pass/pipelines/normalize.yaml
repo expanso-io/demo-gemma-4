@@ -1,0 +1,12 @@
+name: normalize
+type: pipeline
+config:
+  input:
+    stdin:
+      codec: lines
+  pipeline:
+    processors:
+      - mapping: 'root = this'
+  output:
+    stdout:
+      codec: lines

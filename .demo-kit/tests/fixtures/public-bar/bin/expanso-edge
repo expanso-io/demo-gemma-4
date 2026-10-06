@@ -1,0 +1,22 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyyaml>=6,<7"]
+# ///
+from __future__ import annotations
+
+import sys
+import time
+
+
+if sys.argv[1:] == ["version"]:
+    print("fixture-edge v1")
+    raise SystemExit(0)
+if len(sys.argv) >= 3 and sys.argv[1] == "validate":
+    print('[{"valid":true}]')
+    raise SystemExit(0)
+if len(sys.argv) >= 2 and sys.argv[1] == "run":
+    while True:
+        time.sleep(1)
+print("unsupported fixture edge command", file=sys.stderr)
+raise SystemExit(2)

@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://expanso.io/schemas/public-bar-v1.json",
+  "title": "Expanso public example bar manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "repository", "web", "browser", "regressions", "pipelines", "stages"],
+  "properties": {
+    "version": {"const": 1},
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "published"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "published": {"const": true}
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document", "explanation_selector", "explorer_selector",
+        "run_selector", "deploy_selector"
+      ],
+      "properties": {
+        "document": {"$ref": "#/$defs/path"},
+        "explanation_selector": {"$ref": "#/$defs/nonempty"},
+        "explorer_selector": {"$ref": "#/$defs/nonempty"},
+        "run_selector": {"$ref": "#/$defs/nonempty"},
+        "deploy_selector": {"$ref": "#/$defs/nonempty"}
+      }
+    },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url", "ready_url", "start_command", "theme_toggle_selector",
+        "stage_selector", "current_stage_selector", "scroll_anchor_selector",
+        "controls", "stop_command", "json_selectors"
+      ],
+      "properties": {
+        "url": {"type": "string", "pattern": "^http://127\\.0\\.0\\.1:"},
+        "ready_url": {"type": "string", "pattern": "^http://127\\.0\\.0\\.1:"},
+        "start_command": {"$ref": "#/$defs/command"},
+        "stop_command": {"$ref": "#/$defs/command"},
+        "theme_toggle_selector": {"$ref": "#/$defs/nonempty"},
+        "stage_selector": {"$ref": "#/$defs/nonempty"},
+        "current_stage_selector": {"$ref": "#/$defs/nonempty"},
+        "scroll_anchor_selector": {"$ref": "#/$defs/nonempty"},
+        "json_selectors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/nonempty"}
+        },
+        "controls": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/control"}
+        }
+      }
+    },
+    "pipelines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "input"],
+        "oneOf": [
+          {
+            "required": ["expected"],
+            "not": {"required": ["expected_schema"]}
+          },
+          {
+            "required": ["expected_schema", "expected_count"],
+            "not": {"required": ["expected"]}
+          }
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "path": {"$ref": "#/$defs/path"},
+          "input": {"$ref": "#/$defs/path"},
+          "expected": {"$ref": "#/$defs/path"},
+          "expected_schema": {"$ref": "#/$defs/path"},
+          "expected_count": {"type": "integer", "minimum": 1},
+          "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300}
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "pipeline", "selector", "input", "output"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "pipeline": {"$ref": "#/$defs/id"},
+          "selector": {"$ref": "#/$defs/nonempty"},
+          "input": {"$ref": "#/$defs/path"},
+          "output": {"$ref": "#/$defs/path"}
+        }
+      }
+    },
+    "yaml": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role"],
+        "properties": {
+          "path": {"$ref": "#/$defs/path"},
+          "role": {"enum": ["fixture", "support", "workflow", "platform"]}
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "command", "ready_url", "stop_command"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "command": {"$ref": "#/$defs/command"},
+          "ready_url": {"type": "string", "pattern": "^https?://127\\.0\\.0\\.1:"},
+          "stop_command": {"$ref": "#/$defs/command"}
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "profile", "files"],
+        "properties": {
+          "name": {"$ref": "#/$defs/id"},
+          "profile": {
+            "enum": [
+              "kubernetes", "openshift", "compose", "kafka", "mqtt",
+              "prometheus", "managed-cloud", "regulated", "other"
+            ]
+          },
+          "files": {"type": "array", "items": {"$ref": "#/$defs/path"}},
+          "tls": {"type": "boolean"},
+          "auth": {"type": "boolean"},
+          "persistent": {"type": "boolean"},
+          "service": {"$ref": "#/$defs/id"},
+          "probe_command": {"$ref": "#/$defs/command"},
+          "local_replay_pipeline": {"$ref": "#/$defs/id"},
+          "security_evidence": {"$ref": "#/$defs/path"},
+          "validators": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/command"}
+          }
+        }
+      }
+    },
+    "regressions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["features", "removal_files"],
+      "properties": {
+        "features": {"$ref": "#/$defs/path"},
+        "removal_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonempty": {"type": "string", "minLength": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "not": {"pattern": "^(?:/|.*(?:^|/)\\.\\.(?:/|$))"}
+    },
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "kind", "selector", "feedback_selector", "success_text",
+        "failure_text"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["copy", "download"]},
+        "selector": {"$ref": "#/$defs/nonempty"},
+        "feedback_selector": {"$ref": "#/$defs/nonempty"},
+        "success_text": {"$ref": "#/$defs/nonempty"},
+        "failure_text": {"$ref": "#/$defs/nonempty"},
+        "failure_url_pattern": {"$ref": "#/$defs/nonempty"}
+      }
+    }
+  }
+}

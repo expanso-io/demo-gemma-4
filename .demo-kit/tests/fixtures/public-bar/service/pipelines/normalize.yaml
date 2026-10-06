@@ -1,0 +1,15 @@
+name: normalize
+type: pipeline
+config:
+  input:
+    stdin:
+      codec: lines
+  pipeline:
+    processors:
+      - http:
+          url: http://127.0.0.1:4174/
+          verb: GET
+      - mapping: 'root = this'
+  output:
+    stdout:
+      codec: lines
