@@ -54,7 +54,7 @@ from bs4 import BeautifulSoup
 from jsonschema import Draft202012Validator
 
 
-PUBLIC_BAR_VERSION = "1.2.2"
+PUBLIC_BAR_VERSION = "1.3.1"
 CRITERIA = {
     1: "Runs",
     2: "Platform",
@@ -129,6 +129,52 @@ LAUNCHER_STEM_WORDS = {
 LAUNCHER_ARG_WORDS = {"start", "stop", "serve", "up", "down", "restart", "teardown"}
 FENCE = re.compile(r"^\s*(```|~~~)")
 INLINE_CODE = re.compile(r"`([^`\n]+)`")
+SEMVER = r"(?<![\d.])v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?![\d.])"
+EXPANSO_VERSION_ASSIGNMENT = re.compile(
+    rf"\bEXPANSO(?:_(?:EDGE|CLI))?_VERSION\b\s*[:=]\s*['\"]?{SEMVER}",
+    re.I,
+)
+EXPANSO_PACKAGE_PIN = re.compile(
+    rf"\bexpanso-(?:edge|cli)\b\s*(?:==|===|~=|@|:)\s*{SEMVER}",
+    re.I,
+)
+EXPANSO_INSTALLER_PIN = re.compile(
+    rf"\b(?:install-(?:edge|cli)\.sh|get\.expanso\.io/(?:edge|cli))\b"
+    rf"[^\n]{{0,160}}?\s{SEMVER}(?:\s|$)",
+    re.I,
+)
+EXPANSO_INSTALL_GUIDANCE_PIN = re.compile(
+    rf"\b(?:install|run|use)\b[^\n]{{0,80}}?\bexpanso\b"
+    rf"[^\n]{{0,80}}?\b(?:edge|cli)\b[^\n]{{0,40}}?{SEMVER}",
+    re.I,
+)
+EXPANSO_LOCK_PIN = re.compile(
+    rf"\bname\s*=\s*['\"]expanso-(?:edge|cli)['\"]\s*\n"
+    rf"\s*version\s*=\s*['\"]{SEMVER}['\"]",
+    re.I,
+)
+EXPANSO_BINARY_NAME = re.compile(r"^expanso-(?:edge|cli)(?:\.exe)?$", re.I)
+EXPANSO_CLOUD_DEPLOY = re.compile(
+    r"\bexpanso-cli\b[\s\S]{0,200}?\bjob\b[\s\S]{0,80}?\b(?:deploy|update)\b",
+    re.I,
+)
+EXPANSO_CLOUD_HELPER_DEPLOY = re.compile(
+    r"\b[A-Za-z_]\w*\s*\(\s*['\"]job['\"]\s*,\s*"
+    r"['\"](?:deploy|update)['\"]",
+    re.I,
+)
+LOCAL_EDGE_RUN = re.compile(
+    r"\bexpanso-edge\b[^\n]{0,120}?\brun\b[^\n]{0,120}?--local\b",
+    re.I,
+)
+JUST_CLOUD_START = re.compile(
+    r"\bjust\s+(?:up\s+cloud\b|up[-_]cloud\b|cloud[-_]up\b|"
+    r"start[-_]cloud\b|cloud[-_]start\b)",
+    re.I,
+)
+SCRIPT_PATH = re.compile(
+    r"(?<![\w.-])(?:\./)?[\w./-]+\.(?:sh|bash|py|js|mjs|ts)(?![\w.-])"
+)
 
 
 @dataclass
@@ -231,6 +277,95 @@ def tracked_files(repo: Path) -> list[Path]:
         for path in paths
         if not any(part in SKIP_PARTS for part in path.relative_to(repo).parts)
     ]
+
+
+def text_contents(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def is_bundled_expanso_binary(path: Path) -> bool:
+    if not EXPANSO_BINARY_NAME.fullmatch(path.name):
+        return False
+    try:
+        header = path.read_bytes()[:8192]
+    except OSError:
+        return False
+    binary_magics = (
+        b"\x7fELF",
+        b"MZ",
+        b"\xcf\xfa\xed\xfe",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xfe\xed\xfa\xce",
+        b"\xca\xfe\xba\xbe",
+    )
+    return header.startswith(binary_magics) or b"\0" in header
+
+
+def is_recorded_expanso_evidence(path: Path, repo: Path) -> bool:
+    parts = tuple(part.lower() for part in path.relative_to(repo).parts)
+    if not parts or parts[0] != "docs":
+        return False
+    return any(part in {"proof", "evidence", "verification"} for part in parts[1:]) or (
+        "proof" in parts[-1] or "report" in parts[-1]
+    )
+
+
+def expanso_version_pin_lines(path: Path, repo: Path, text: str) -> list[int]:
+    if is_recorded_expanso_evidence(path, repo):
+        return []
+    logical_text = re.sub(r"\\\s*\n\s*", " ", text)
+    patterns = (
+        EXPANSO_VERSION_ASSIGNMENT,
+        EXPANSO_PACKAGE_PIN,
+        EXPANSO_INSTALLER_PIN,
+        EXPANSO_INSTALL_GUIDANCE_PIN,
+    )
+    lines = [
+        number
+        for number, line in enumerate(logical_text.splitlines(), start=1)
+        if any(pattern.search(line) for pattern in patterns)
+    ]
+    if "lock" in path.name.lower():
+        lines.extend(
+            text.count("\n", 0, match.start()) + 1
+            for match in EXPANSO_LOCK_PIN.finditer(text)
+        )
+    return sorted(set(lines))
+
+
+def check_expanso_tool_policy(repo: Path, audit: Audit) -> None:
+    pins: list[str] = []
+    binaries: list[str] = []
+    for path in tracked_files(repo):
+        relative = path.relative_to(repo).as_posix()
+        if is_bundled_expanso_binary(path):
+            binaries.append(relative)
+            continue
+        text = text_contents(path)
+        if text is None:
+            continue
+        for number in expanso_version_pin_lines(path, repo, text):
+            pins.append(f"{relative}:{number}")
+    audit.add(
+        2,
+        "expanso-tool-versions",
+        not pins,
+        "tracked files install the latest Expanso Edge and CLI without a version pin"
+        if not pins
+        else "version-pinned Expanso tool install: " + ", ".join(pins),
+    )
+    audit.add(
+        2,
+        "expanso-tool-binaries",
+        not binaries,
+        "tracked files contain no bundled Expanso Edge or CLI binary"
+        if not binaries
+        else "bundled Expanso tool binary: " + ", ".join(binaries),
+    )
 
 
 def load_json(path: Path) -> Any:
@@ -906,6 +1041,72 @@ def required_parameters(recipe: dict[str, Any]) -> list[str]:
     ]
 
 
+def all_parameters(recipe: dict[str, Any]) -> list[str]:
+    return [str(parameter.get("name")) for parameter in recipe.get("parameters", [])]
+
+
+def nested_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for part in value for item in nested_strings(part)]
+    return []
+
+
+def recipe_source(recipes: dict[str, Any], start: str) -> str:
+    pending = [start]
+    seen: set[str] = set()
+    lines: list[str] = []
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        recipe = recipes.get(name)
+        if not isinstance(recipe, dict):
+            continue
+        body = "\n".join(nested_strings(recipe.get("body", [])))
+        lines.append(body)
+        for dependency in recipe.get("dependencies", []):
+            if isinstance(dependency, dict) and dependency.get("recipe"):
+                pending.append(str(dependency["recipe"]))
+        for called in re.findall(r"(?:^|[;&|]\s*)@?just\s+([\w.-]+)", body, re.M):
+            pending.append(called)
+    return "\n".join(lines)
+
+
+def reachable_start_source(repo: Path, recipes: dict[str, Any], start: str) -> str:
+    source = recipe_source(recipes, start)
+    pending = list(SCRIPT_PATH.findall(source))
+    seen: set[Path] = set()
+    while pending:
+        raw = pending.pop()
+        try:
+            path = safe_path(repo, raw.removeprefix("./"))
+        except ValueError:
+            continue
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        text = text_contents(path)
+        if text is None:
+            continue
+        source += "\n" + text
+        pending.extend(SCRIPT_PATH.findall(text))
+    return source
+
+
+def cloud_start_recipe(name: str) -> bool:
+    normalized = name.lower().replace("_", "-")
+    return normalized in {"up-cloud", "cloud-up", "start-cloud", "cloud-start"}
+
+
+def deploys_cloud_pipeline(source: str) -> bool:
+    direct = EXPANSO_CLOUD_DEPLOY.search(source)
+    helper = EXPANSO_CLOUD_HELPER_DEPLOY.search(source)
+    return bool(direct or (helper and re.search(r"\bexpanso-cli\b", source)))
+
+
 def check_justfile(repo: Path, audit: Audit) -> None:
     justfiles = sorted(
         path
@@ -958,6 +1159,9 @@ def check_justfile(repo: Path, audit: Audit) -> None:
     audit.add(3, "justfile", True, f"{justfile.name} parsed by just")
     recipes = dump.get("recipes") or {}
     aliases = dump.get("aliases") or {}
+    up_target = "up"
+    if up_target not in recipes and up_target in aliases:
+        up_target = str(aliases[up_target].get("target", ""))
     for name in LIFECYCLE_RECIPES:
         target = name
         if name not in recipes and name in aliases:
@@ -981,6 +1185,59 @@ def check_justfile(repo: Path, audit: Audit) -> None:
             if not required
             else f"`just {name}` needs arguments: " + ", ".join(required),
         )
+        if name == "up":
+            parameters = all_parameters(recipe)
+            audit.add(
+                3,
+                "just:up-plain",
+                not parameters,
+                "`just up` takes no mode or target argument"
+                if not parameters
+                else "move alternate modes to separate recipes; `up` has parameters: "
+                + ", ".join(parameters),
+            )
+    cloud_variants = sorted(name for name in recipes if cloud_start_recipe(name))
+    audit.add(
+        3,
+        "just:cloud-start-name",
+        not cloud_variants,
+        "justfile has no Cloud-specific alternative to plain `just up`"
+        if not cloud_variants
+        else "replace Cloud start recipes with plain `up`: "
+        + ", ".join(cloud_variants),
+    )
+    cloud_commands = [
+        match.group(0)
+        for match in JUST_CLOUD_START.finditer(justfile.read_text(encoding="utf-8"))
+    ]
+    audit.add(
+        3,
+        "just:cloud-start-command",
+        not cloud_commands,
+        "justfile invokes no Cloud-specific alternative to plain `just up`"
+        if not cloud_commands
+        else "replace Cloud start commands with plain `just up`: "
+        + ", ".join(cloud_commands),
+    )
+    up_source = reachable_start_source(repo, recipes, up_target)
+    cloud_deploy = deploys_cloud_pipeline(up_source)
+    audit.add(
+        3,
+        "just:up-cloud-deploy",
+        cloud_deploy,
+        "plain `just up` reaches `expanso-cli job deploy` or `job update`"
+        if cloud_deploy
+        else "plain `just up` does not deploy or update an Expanso Cloud pipeline",
+    )
+    local_edge = bool(LOCAL_EDGE_RUN.search(up_source))
+    audit.add(
+        3,
+        "just:up-cloud-mode",
+        not local_edge,
+        "plain `just up` does not select the local Edge runtime"
+        if not local_edge
+        else "move the offline/local Edge mode to a separately named recipe",
+    )
 
 
 def readme_code(text: str) -> Iterable[tuple[int, str, bool]]:
@@ -1062,10 +1319,18 @@ def check_readme_lifecycle(repo: Path, audit: Audit) -> None:
     readme = readmes[0]
     shown: set[str] = set()
     launchers: list[str] = []
+    cloud_variants: list[str] = []
     for number, code, fenced in readme_code(readme.read_text(encoding="utf-8")):
         for words in code_commands(code):
             if words[0] == "just" and len(words) > 1:
                 shown.add(words[1])
+                if (
+                    cloud_start_recipe(words[1])
+                    or (words[1] == "up" and len(words) > 2)
+                ):
+                    cloud_variants.append(
+                        f"{readme.name}:{number} `{' '.join(words)}`"
+                    )
             # A lone inline path such as `scripts/serve.py` names a file; it
             # is a command only when written to run, as in `./scripts/serve.py`.
             if (
@@ -1096,6 +1361,14 @@ def check_readme_lifecycle(repo: Path, audit: Audit) -> None:
         else "start and stop with `just up` / `just down`, not "
         + "; ".join(launchers[:5])
         + (f" (+{len(launchers) - 5} more)" if len(launchers) > 5 else ""),
+    )
+    audit.add(
+        3,
+        "readme:cloud-start",
+        not cloud_variants,
+        f"{readme.name} uses plain `just up` as the Cloud start path"
+        if not cloud_variants
+        else "use plain `just up`, not " + ", ".join(cloud_variants),
     )
 
 
@@ -1377,6 +1650,7 @@ def static_lane(
         if services:
             stop_declared_services(repo, audit, 1, processes, services, ready_urls)
     check_platforms(repo, manifest, audit)
+    check_expanso_tool_policy(repo, audit)
     check_structure(repo, manifest, audit)
     check_justfile(repo, audit)
     check_readme_lifecycle(repo, audit)
@@ -2095,6 +2369,16 @@ def run_selftest(script_dir: Path) -> int:
         for case_name, expected_criterion, overlay in cases:
             repo = temporary / case_name
             initialize_selftest_repo(good, overlay, repo)
+            if overlay == service_overlay:
+                port = free_port()
+                manifest_path = repo / "public-bar.toml"
+                manifest_path.write_text(
+                    manifest_path.read_text().replace("4174", str(port))
+                )
+                pipeline_path = repo / "pipelines" / "normalize.yaml"
+                pipeline_path.write_text(
+                    pipeline_path.read_text().replace("4174", str(port))
+                )
             report = repo / "artifacts" / "public-bar.md"
             command = [
                 sys.executable,
@@ -2149,7 +2433,11 @@ def run_selftest(script_dir: Path) -> int:
                     )
                 elif case_name == "service-pipeline" and not (
                     (repo / "sidecar.stopped").is_file()
-                    and not url_reachable("http://127.0.0.1:4174/")
+                    and not url_reachable(
+                        tomllib.loads(
+                            (repo / "public-bar.toml").read_text(encoding="utf-8")
+                        )["services"][0]["ready_url"]
+                    )
                 ):
                     failures.append(
                         f"{case_name}: declared service was not stopped afterward"

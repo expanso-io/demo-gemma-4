@@ -50,7 +50,10 @@ just up
 just down
 ```
 
-`just up` uses the Gemma 4 inference server at `INFERENCE_URL` when one
+`just up` renders and deploys or updates the job in Expanso Cloud. For the
+localhost presenter and local Edge replay, use `just up-local` and
+`just down-local`. The local mode uses the Gemma 4 inference server at
+`INFERENCE_URL` when one
 answers. Otherwise it starts llama.cpp with the Gemma 4 E2B model (Jetson or
 dedicated GPU); on a Mac or desktop, run Ollama and point `INFERENCE_URL` at
 it first. It then starts the dashboard at http://localhost:9090 and the
@@ -63,8 +66,8 @@ The dashboard shows the live feed, the current Gemma 4 result, and detection
 history. A new browser connection receives the last ten detections before live
 updates begin. The `/record` page captures frames by label for fine-tuning.
 
-`just down` stops the pipeline, the dashboard, and any inference server
-`just up` started, clears the local Edge job state, and fails unless their
+`just down-local` stops the pipeline, the dashboard, and any inference server
+`just up-local` started, clears the local Edge job state, and fails unless their
 ports are free.
 
 ### Reproduce the checked-in verification
@@ -87,8 +90,9 @@ label, then install the systemd units and start the stack:
 
 ```bash
 just setup-jetson
-just up jetson
-just down jetson
+just up-jetson
+just up          # deploy or update the Cloud pipeline
+just down-jetson
 ```
 
 From an authenticated operator machine, validate and deploy the generated job:

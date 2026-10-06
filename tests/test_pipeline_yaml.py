@@ -74,14 +74,17 @@ class TestSubprocessProcessor:
     def test_first_processor_is_subprocess(self, processors):
         assert "subprocess" in processors[0]
 
-    def test_subprocess_runs_uv(self, processors):
+    def test_subprocess_runs_capture_bridge(self, processors):
         proc = processors[0]["subprocess"]
-        assert proc["name"] == "uv"
+        assert proc["name"] == "sh"
+        assert "capture_bridge.py" in " ".join(proc["args"])
 
     def test_subprocess_runs_capture_script(self, processors):
         proc = processors[0]["subprocess"]
         args_str = " ".join(proc["args"])
-        assert "capture_frame.py" in args_str
+        assert "capture_bridge.py" in args_str
+        with open(os.path.join(SCRIPT_DIR, "scripts", "capture_bridge.py")) as bridge:
+            assert "capture_frame.py" in bridge.read()
 
     def test_subprocess_has_buffer(self, processors):
         proc = processors[0]["subprocess"]

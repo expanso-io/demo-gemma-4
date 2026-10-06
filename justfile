@@ -3,17 +3,35 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 _default:
     @just --list
 
-# Start the demo: target=mac (this machine) or target=jetson (systemd stack).
-up target="mac":
-    @just _up-{{target}}
+# Deploy or update the generated pipeline in Expanso Cloud.
+up:
+    ./scripts/deploy.sh
 
-# Stop the demo started by up with the same target.
-down target="mac":
-    @just _down-{{target}}
+# Stop this demo's Cloud job.
+down:
+    expanso-cli job stop gemma4-vision-demo --force
 
-# Restart the demo: target=mac (down then up) or target=jetson (systemd stack).
-restart target="mac":
-    @just _restart-{{target}}
+restart: down up
+
+# Local presenter and local Edge replay.
+up-local:
+    @just _up-mac
+
+down-local:
+    @just _down-mac
+
+restart-local:
+    @just _restart-mac
+
+# Jetson systemd stack; Cloud deployment remains `just up`.
+up-jetson:
+    @just _up-jetson
+
+down-jetson:
+    @just _down-jetson
+
+restart-jetson:
+    @just _restart-jetson
 
 # One-time Jetson setup: model server, node label, systemd units.
 setup-jetson:

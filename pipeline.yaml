@@ -38,12 +38,17 @@ pipeline:
     # │ Step 1: Capture a frame from the webcam                 │
     # └─────────────────────────────────────────────────────────┘
     - subprocess:
-        name: uv
-        args: ["run", "-s", "capture_frame.py"]
+        name: sh
+        args:
+          - -c
+          - >-
+            mkdir -p .runtime && exec uv run -s scripts/capture_bridge.py
+            2>>.runtime/capture-uv.stderr.log
         max_buffer: 1048576
 
     - mapping: |
-        root = content().string().parse_json()
+        let parsed = content().string().parse_json()
+        root = if $parsed.error != null { throw($parsed.error) } else { $parsed }
 
     - mapping: |
         root = if this.exists("image_base64") { this } else { deleted() }
