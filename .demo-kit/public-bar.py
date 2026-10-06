@@ -6,6 +6,7 @@
 #   "jsonschema>=4.23,<5",
 #   "playwright==1.55.0",
 #   "pyyaml>=6,<7",
+#   "rust-just==1.56.0",
 # ]
 # ///
 """Enforce the public example bar and write durable Markdown/JSON evidence.
@@ -16,7 +17,8 @@
       --report artifacts/public-bar.md
 
 The static lane validates the manifest, pipeline fixtures, platform claims,
-published structure, browser declarations, and retained-feature baseline. The
+published structure and `just up` / `just down` lifecycle, browser declarations,
+and retained-feature baseline. The
 browser lane is added to the same command by ``--lane all`` or run on its own
 with ``--lane browser``. Every invocation writes its report, including failed
 and incomplete runs.
@@ -32,6 +34,7 @@ import importlib.metadata
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -51,7 +54,7 @@ from bs4 import BeautifulSoup
 from jsonschema import Draft202012Validator
 
 
-PUBLIC_BAR_VERSION = "1.1.3"
+PUBLIC_BAR_VERSION = "1.2.2"
 CRITERIA = {
     1: "Runs",
     2: "Platform",
@@ -91,6 +94,41 @@ PLACEHOLDER = re.compile(
     re.I,
 )
 IMAGE = re.compile(r"^([^\s@]+)(?::([^\s@/]+))?(?:@sha256:[0-9a-f]{64})?$")
+JUSTFILE_NAMES = {"justfile", ".justfile"}
+LIFECYCLE_RECIPES = ("up", "down")
+# A README command that runs one of these scripts directly is a raw launcher:
+# start and stop go through `just up` and `just down` instead.
+SCRIPT_SUFFIXES = (".sh", ".bash", ".py", ".js", ".mjs", ".ts")
+SCRIPT_WRAPPERS = {"bash", "sh", "zsh", "env", "exec", "nohup", "sudo", "time"}
+SCRIPT_INTERPRETERS = {"python", "python3", "node", "deno", "bun"}
+UV_VALUE_OPTIONS = {
+    "--with",
+    "--python",
+    "-p",
+    "--project",
+    "--directory",
+    "--extra",
+    "--group",
+    "--package",
+    "--env-file",
+    "--from",
+}
+LAUNCHER_STEM_WORDS = {
+    "run",
+    "start",
+    "stop",
+    "serve",
+    "server",
+    "up",
+    "down",
+    "launch",
+    "teardown",
+    "shutdown",
+    "restart",
+}
+LAUNCHER_ARG_WORDS = {"start", "stop", "serve", "up", "down", "restart", "teardown"}
+FENCE = re.compile(r"^\s*(```|~~~)")
+INLINE_CODE = re.compile(r"`([^`\n]+)`")
 
 
 @dataclass
@@ -851,6 +889,216 @@ def check_structure(repo: Path, manifest: dict[str, Any], audit: Audit) -> None:
         audit.add(3, "explorer-stages", False, "manifest declares no explorer stages")
 
 
+def just_binary() -> str | None:
+    found = shutil.which("just")
+    if found:
+        return found
+    # `uv run -s` installs the pinned rust-just wheel beside the interpreter.
+    sibling = Path(sys.executable).parent / "just"
+    return str(sibling) if sibling.is_file() else None
+
+
+def required_parameters(recipe: dict[str, Any]) -> list[str]:
+    return [
+        str(parameter.get("name"))
+        for parameter in recipe.get("parameters", [])
+        if parameter.get("default") is None and parameter.get("kind") != "star"
+    ]
+
+
+def check_justfile(repo: Path, audit: Audit) -> None:
+    justfiles = sorted(
+        path
+        for path in repo.iterdir()
+        if path.is_file() and path.name.lower() in JUSTFILE_NAMES
+    )
+    if not justfiles:
+        audit.add(
+            3,
+            "justfile",
+            False,
+            "no justfile at the repository root; add one with up and down recipes",
+        )
+        return
+    justfile = justfiles[0]
+    binary = just_binary()
+    if not binary:
+        audit.add(3, "justfile", False, "just is required to read the justfile")
+        return
+    result = subprocess.run(
+        [
+            binary,
+            "--justfile",
+            str(justfile),
+            "--working-directory",
+            str(repo),
+            "--dump",
+            "--dump-format",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    try:
+        dump = json.loads(result.stdout) if result.returncode == 0 else None
+    except json.JSONDecodeError:
+        dump = None
+    if not isinstance(dump, dict):
+        error = (result.stderr or result.stdout).strip().splitlines()
+        audit.add(
+            3,
+            "justfile",
+            False,
+            f"just could not parse {justfile.name}: "
+            + (error[0] if error else f"exit {result.returncode}"),
+        )
+        return
+    audit.add(3, "justfile", True, f"{justfile.name} parsed by just")
+    recipes = dump.get("recipes") or {}
+    aliases = dump.get("aliases") or {}
+    for name in LIFECYCLE_RECIPES:
+        target = name
+        if name not in recipes and name in aliases:
+            target = str(aliases[name].get("target", ""))
+        recipe = recipes.get(target)
+        if not isinstance(recipe, dict):
+            audit.add(
+                3,
+                f"just:{name}",
+                False,
+                f"justfile has no `{name}` recipe; `just {name}` must "
+                + ("start everything" if name == "up" else "stop and clean up"),
+            )
+            continue
+        required = required_parameters(recipe)
+        audit.add(
+            3,
+            f"just:{name}",
+            not required,
+            f"`just {name}` runs recipe {target}"
+            if not required
+            else f"`just {name}` needs arguments: " + ", ".join(required),
+        )
+
+
+def readme_code(text: str) -> Iterable[tuple[int, str, bool]]:
+    """Yield (line number, code, fenced) for fenced lines and inline code."""
+    fenced = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced:
+            yield number, line, True
+        else:
+            for match in INLINE_CODE.finditer(line):
+                yield number, match.group(1), False
+
+
+def code_commands(code: str) -> Iterable[list[str]]:
+    for segment in re.split(r"&&|\|\||[;|]", code):
+        segment = re.sub(r"^\s*[$>]\s+", "", segment)
+        try:
+            words = shlex.split(segment, comments=True)
+        except ValueError:
+            words = segment.split()
+        while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+            words = words[1:]
+        if words:
+            yield words
+
+
+def launched_script(words: list[str]) -> tuple[str, list[str]] | None:
+    """Return the script path and its arguments when a command runs one."""
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if word in SCRIPT_WRAPPERS or word in SCRIPT_INTERPRETERS:
+            index += 1
+        elif word in {"uv", "uvx"}:
+            index += 2 if index + 1 < len(words) and words[index + 1] == "run" else 1
+            while index < len(words) and words[index].startswith("-"):
+                index += 2 if words[index] in UV_VALUE_OPTIONS else 1
+        elif word.startswith("-"):
+            index += 1
+        else:
+            break
+    if index >= len(words):
+        return None
+    target = words[index]
+    if target.startswith(".demo-kit/") or "://" in target:
+        return None
+    is_path = (
+        target.startswith(("./", "../", "scripts/"))
+        or "/scripts/" in target
+        or target.endswith(SCRIPT_SUFFIXES)
+    )
+    return (target, words[index + 1 :]) if is_path else None
+
+
+def is_lifecycle_launcher(script: str, arguments: list[str]) -> bool:
+    # A harness under tests/ runs checks, not the demo.
+    if {"tests", "test"} & set(Path(script).parts[:-1]):
+        return False
+    stem = Path(script).name
+    for suffix in SCRIPT_SUFFIXES:
+        stem = stem.removesuffix(suffix)
+    stem_words = set(re.split(r"[-_.]+", stem.lower()))
+    argument_words = {argument.lower() for argument in arguments}
+    return bool(stem_words & LAUNCHER_STEM_WORDS or argument_words & LAUNCHER_ARG_WORDS)
+
+
+def check_readme_lifecycle(repo: Path, audit: Audit) -> None:
+    readmes = sorted(
+        path
+        for path in repo.iterdir()
+        if path.is_file() and path.name.lower() == "readme.md"
+    )
+    if not readmes:
+        audit.add(3, "readme:just", False, "no README.md at the repository root")
+        return
+    readme = readmes[0]
+    shown: set[str] = set()
+    launchers: list[str] = []
+    for number, code, fenced in readme_code(readme.read_text(encoding="utf-8")):
+        for words in code_commands(code):
+            if words[0] == "just" and len(words) > 1:
+                shown.add(words[1])
+            # A lone inline path such as `scripts/serve.py` names a file; it
+            # is a command only when written to run, as in `./scripts/serve.py`.
+            if (
+                not fenced
+                and len(words) == 1
+                and not words[0].startswith(("./", "../"))
+            ):
+                continue
+            launched = launched_script(words)
+            if launched and is_lifecycle_launcher(*launched):
+                launchers.append(f"{readme.name}:{number} `{' '.join(words)}`")
+    missing = [name for name in LIFECYCLE_RECIPES if name not in shown]
+    audit.add(
+        3,
+        "readme:just",
+        not missing,
+        f"{readme.name} starts with `just up` and stops with `just down`"
+        if not missing
+        else f"{readme.name} never shows "
+        + " or ".join(f"`just {name}`" for name in missing),
+    )
+    audit.add(
+        3,
+        "readme:raw-launcher",
+        not launchers,
+        f"{readme.name} shows no raw start or stop script"
+        if not launchers
+        else "start and stop with `just up` / `just down`, not "
+        + "; ".join(launchers[:5])
+        + (f" (+{len(launchers) - 5} more)" if len(launchers) > 5 else ""),
+    )
+
+
 def check_browser_contract(manifest: dict[str, Any], audit: Audit) -> None:
     browser = manifest.get("browser", {})
     required = {
@@ -1130,6 +1378,8 @@ def static_lane(
             stop_declared_services(repo, audit, 1, processes, services, ready_urls)
     check_platforms(repo, manifest, audit)
     check_structure(repo, manifest, audit)
+    check_justfile(repo, audit)
+    check_readme_lifecycle(repo, audit)
     check_browser_contract(manifest, audit)
     check_ui_source(repo, audit)
     check_regressions(repo, manifest, feature_schema, audit, refs)
@@ -1832,12 +2082,14 @@ def run_selftest(script_dir: Path) -> int:
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="public-bar-selftest-") as raw:
         temporary = Path(raw)
+        # fail/<n> and fail/<n>-<topic> each break exactly criterion n.
         cases: list[tuple[str, int | None, Path | None]] = [
             ("known-good", None, None),
             ("service-pipeline", None, service_overlay),
             *[
-                (f"criterion-{number}", number, bad_root / str(number))
-                for number in CRITERIA
+                (f"criterion-{overlay.name}", int(overlay.name.split("-")[0]), overlay)
+                for overlay in sorted(bad_root.iterdir())
+                if overlay.is_dir() and overlay.name.split("-")[0].isdigit()
             ],
         ]
         for case_name, expected_criterion, overlay in cases:
@@ -1917,15 +2169,25 @@ def run_selftest(script_dir: Path) -> int:
                     f"failed={failed_criteria}"
                 )
             else:
+                names = sorted(
+                    {
+                        str(assertion["name"])
+                        for assertion in payload["assertions"]
+                        if not assertion["passed"]
+                    }
+                )
                 print(
-                    f"PASS criterion {expected_criterion} "
-                    f"{CRITERIA[expected_criterion]}: failed alone and was named"
+                    f"PASS {case_name} {CRITERIA[expected_criterion]}: "
+                    f"failed alone and was named ({', '.join(names)})"
                 )
     if failures:
         for failure in failures:
             print(f"FAIL selftest: {failure}", file=sys.stderr)
         return 1
-    print("ok: public-bar selftest (2 good, 5 criterion-isolated failures)")
+    print(
+        f"ok: public-bar selftest (2 good, {len(cases) - 2} "
+        "criterion-isolated failures)"
+    )
     return 0
 
 
@@ -1967,6 +2229,7 @@ def main() -> int:
         "expanso-edge": command_version(args.edge_binary, "version"),
         "expanso-cli": command_version(args.cli_binary, "version"),
         "playwright": importlib.metadata.version("playwright"),
+        "just": command_version(just_binary() or "just", "--version"),
         "python": sys.version.split()[0],
     }
     try:
