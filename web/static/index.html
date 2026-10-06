@@ -1603,6 +1603,18 @@
     }
 
     // ── Tab Switching ──────────────────────
+    let liveStarted = false;
+
+    function startLive() {
+      if (liveStarted) return;
+      liveStarted = true;
+      connectSSE();
+      setTimeout(() => {
+        refreshLive();
+        setInterval(refreshLive, 300);
+      }, 1000);
+    }
+
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(button => {
         const active = button.dataset.tab === tab;
@@ -1611,6 +1623,7 @@
       });
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.getElementById('tab-' + tab).classList.add('active');
+      if (tab === 'live') startLive();
     }
 
     // ── Init ───────────────────────────────
@@ -1618,7 +1631,9 @@
     document.querySelectorAll('.tab-btn').forEach(button => {
       button.addEventListener('click', () => switchTab(button.dataset.tab));
     });
-    if (window.location.hash === '#explorer') switchTab('explorer');
+    const explorerEntry = window.location.hash === '#explorer';
+    if (explorerEntry) switchTab('explorer');
+    else startLive();
     document.addEventListener('keydown', event => {
       if (!document.getElementById('tab-explorer').classList.contains('active')) return;
       if (event.target.matches('input, textarea, select')) return;
@@ -1632,11 +1647,6 @@
       }
     });
     loadExplorer();
-    connectSSE();
-    setTimeout(() => {
-      refreshLive();
-      setInterval(refreshLive, 300);
-    }, 1000);
   </script>
 </body>
 </html>

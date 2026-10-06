@@ -53,7 +53,9 @@ def test_copy_and_download_report_local_results():
 
 
 def test_browser_check_can_open_the_explorer_directly():
-    assert "window.location.hash === '#explorer'" in INDEX
+    assert "const explorerEntry = window.location.hash === '#explorer'" in INDEX
+    assert "if (explorerEntry) switchTab('explorer');" in INDEX
+    assert "else startLive();" in INDEX
     assert 'data-public-json="input"' in INDEX
     assert 'data-public-json="output"' in INDEX
 
