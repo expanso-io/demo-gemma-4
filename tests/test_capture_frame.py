@@ -78,6 +78,24 @@ class TestCaptureFrameScript:
         assert result.returncode == 0
 
     @pytest.mark.skipif(not _has_opencv(), reason="opencv-python not installed")
+    def test_recorded_frame_envelope_does_not_open_a_camera(self):
+        fixture = {
+            "image_base64": base64.b64encode(b"recorded frame").decode(),
+            "fixture_responses": {"detect": {"raw": "person"}},
+        }
+        result = subprocess.run(
+            [sys.executable, "-u", CAPTURE_SCRIPT],
+            input=json.dumps(fixture) + "\n",
+            capture_output=True,
+            text=True,
+            cwd=SCRIPT_DIR,
+            timeout=10,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == fixture
+
+    @pytest.mark.skipif(not _has_opencv(), reason="opencv-python not installed")
     @pytest.mark.skipif(not _has_camera(), reason="No camera available")
     def test_single_capture(self):
         """Send one trigger, get one JSON frame back."""

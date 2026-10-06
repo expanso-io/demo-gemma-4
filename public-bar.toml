@@ -1,0 +1,129 @@
+version = 1
+
+[repository]
+name = "demo-gemma-4"
+published = true
+
+[web]
+document = "web/static/index.html"
+explanation_selector = "#explanation"
+explorer_selector = "#stageExplorer"
+run_selector = "#runInstructions"
+deploy_selector = "#deployInstructions"
+
+[browser]
+url = "http://127.0.0.1:19090/#explorer"
+ready_url = "http://127.0.0.1:19090/"
+start_command = ["./scripts/public-dashboard.sh", "start"]
+stop_command = ["./scripts/public-dashboard.sh", "stop"]
+theme_toggle_selector = "#themeToggle"
+stage_selector = "[data-stage-id]"
+current_stage_selector = "[data-stage-id][aria-current='step']"
+scroll_anchor_selector = "#stageExplorer"
+json_selectors = ["[data-public-json]"]
+
+[[browser.controls]]
+id = "copy-stage-output"
+kind = "copy"
+selector = "[data-stage-action='copy']"
+feedback_selector = "#copyStatus"
+success_text = "Copied"
+failure_text = "Copy failed"
+
+[[browser.controls]]
+id = "download-stage"
+kind = "download"
+selector = "[data-stage-action='download']"
+feedback_selector = "#downloadStatus"
+success_text = "Download started"
+failure_text = "Download failed"
+failure_url_pattern = "**/static/explorer.json?download=*"
+
+[[pipelines]]
+id = "gemma4-vision"
+path = "scripts/job.yaml"
+input = "fixtures/public-bar/input.jsonl"
+expected_schema = "fixtures/public-bar/output.schema.json"
+expected_count = 1
+timeout_seconds = 60
+
+[[stages]]
+id = "capture"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='capture']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "detect"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='detect']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "read"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='read']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "describe"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='describe']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "safety"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='safety']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "schema"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='schema']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "attest"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='attest']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[stages]]
+id = "fanout"
+pipeline = "gemma4-vision"
+selector = "[data-stage-id='fanout']"
+input = "web/static/explorer.json"
+output = "web/static/explorer.json"
+
+[[yaml]]
+path = "pipeline.yaml"
+role = "support"
+
+[[yaml]]
+path = "config/jetson-labels.yaml"
+role = "platform"
+
+[[platforms]]
+name = "nvidia-jetson"
+profile = "other"
+files = [
+  "config/jetson-labels.yaml",
+  "systemd/gemma4-pipeline.service",
+  "scripts/setup-jetson.sh",
+]
+validators = [
+  ["bash", "-n", "scripts/setup-jetson.sh"],
+  ["uv", "run", "pytest", "-q", "tests/test_run_sh.py"],
+]
+
+[regressions]
+features = "public-features.json"
+removal_files = ["public-removals/*.json"]

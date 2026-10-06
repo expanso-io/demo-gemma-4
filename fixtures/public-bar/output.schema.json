@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "minItems": 1,
+  "maxItems": 1,
+  "items": {
+    "type": "object",
+    "required": [
+      "timestamp",
+      "node_id",
+      "pipeline_version",
+      "model",
+      "frame_id",
+      "mode",
+      "detect",
+      "read_text",
+      "describe",
+      "safety",
+      "total_ms",
+      "total_tokens",
+      "integrity",
+      "attestation"
+    ],
+    "properties": {
+      "timestamp": {"type": "string", "minLength": 20},
+      "node_id": {"const": "edge-cam-001"},
+      "pipeline_version": {"const": "2.0.0"},
+      "model": {"const": "gemma4-e2b-q4"},
+      "frame_id": {
+        "type": "string",
+        "pattern": "^[0-9a-f-]{36}$"
+      },
+      "mode": {"const": "multi"},
+      "detect": {
+        "type": "object",
+        "required": ["labels", "count", "ms", "tokens"],
+        "properties": {
+          "labels": {"const": ["person", "bottle"]},
+          "count": {"const": 2},
+          "ms": {"const": 0},
+          "tokens": {"const": 2}
+        }
+      },
+      "read_text": {
+        "type": "object",
+        "required": ["text", "ms", "tokens"],
+        "properties": {
+          "text": {"const": "GEMMA 4"},
+          "ms": {"const": 0},
+          "tokens": {"const": 2}
+        }
+      },
+      "describe": {
+        "type": "object",
+        "required": ["summary", "ms", "tokens"],
+        "properties": {
+          "summary": {
+            "const": "A person holds a bottle beside an edge camera."
+          },
+          "ms": {"const": 0},
+          "tokens": {"const": 9}
+        }
+      },
+      "safety": {
+        "type": "object",
+        "required": ["safe", "risk", "detail", "ms", "tokens"],
+        "properties": {
+          "safe": {"const": true},
+          "risk": {"const": 1},
+          "detail": {"const": "safe"},
+          "ms": {"const": 0},
+          "tokens": {"const": 1}
+        }
+      },
+      "total_ms": {"const": 0},
+      "total_tokens": {"const": 14},
+      "integrity": {
+        "type": "object",
+        "required": ["frame_sha256"],
+        "properties": {
+          "frame_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "attestation": {
+        "type": "object",
+        "required": ["_type", "subject", "predicateType", "predicate"],
+        "properties": {
+          "_type": {"const": "https://in-toto.io/Statement/v1"},
+          "predicateType": {"const": "https://makoto.dev/transform/v1"},
+          "subject": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["digest"],
+              "properties": {
+                "digest": {
+                  "type": "object",
+                  "required": ["sha256", "recordCount"],
+                  "properties": {
+                    "sha256": {"pattern": "^[0-9a-f]{64}$"},
+                    "recordCount": {"const": "4"}
+                  }
+                }
+              }
+            }
+          },
+          "predicate": {
+            "type": "object",
+            "required": ["executor", "transform", "metadata"],
+            "properties": {
+              "executor": {
+                "type": "object",
+                "required": ["id", "platform"],
+                "properties": {
+                  "id": {"const": "expanso-edge://edge-cam-001"},
+                  "platform": {"const": "expanso-edge"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

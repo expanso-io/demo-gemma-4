@@ -33,13 +33,15 @@ config:
 
         '
     - branch:
-        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
-          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
-          text\", \"text\": \"Which of these objects are actually visible in this\
+        request_map: "let request = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n\
+          \    {\n      \"role\": \"user\",\n      \"content\": [\n        {\"type\"\
+          : \"text\", \"text\": \"Which of these objects are actually visible in this\
           \ image: person, box, bottle, sign? List only the ones you can see, CSV.\
           \ If none, reply: none\"},\n        {\"type\": \"image_url\", \"image_url\"\
           : {\"url\": \"data:image/jpeg;base64,\" + this.image_base64}}\n      ]\n\
-          \    }\n  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\n"
+          \    }\n  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\nroot = if\
+          \ this.exists(\"fixture_responses.detect\") {\n  deleted()\n} else {\n \
+          \ $request\n}\n"
         processors:
         - http:
             url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
@@ -51,17 +53,20 @@ config:
         result_map: "root.detect = {\n  \"raw\": this.choices.index(0).message.content,\n\
           \  \"ms\": timestamp_unix_milli() - metadata(\"detect_start\"),\n  \"tokens\"\
           : this.usage.total_tokens.or(0)\n}\n"
+    - mutation: "root.detect = if this.exists(\"fixture_responses.detect\") {\n  this.fixture_responses.detect\n\
+        } else {\n  this.detect\n}\n"
     - mutation: 'meta read_start = timestamp_unix_milli()
 
         '
     - branch:
-        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
-          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
-          text\", \"text\": \"Read all text visible in this image. Return only the\
-          \ text strings, comma-separated. If no text is visible, reply: none\"},\n\
-          \        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,\"\
+        request_map: "let request = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n\
+          \    {\n      \"role\": \"user\",\n      \"content\": [\n        {\"type\"\
+          : \"text\", \"text\": \"Read all text visible in this image. Return only\
+          \ the text strings, comma-separated. If no text is visible, reply: none\"\
+          },\n        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,\"\
           \ + this.image_base64}}\n      ]\n    }\n  ],\n  \"max_tokens\": 24,\n \
-          \ \"temperature\": 0.1\n}\n"
+          \ \"temperature\": 0.1\n}\nroot = if this.exists(\"fixture_responses.read_text\"\
+          ) {\n  deleted()\n} else {\n  $request\n}\n"
         processors:
         - http:
             url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
@@ -73,16 +78,19 @@ config:
         result_map: "root.read_text = {\n  \"raw\": this.choices.index(0).message.content,\n\
           \  \"ms\": timestamp_unix_milli() - metadata(\"read_start\"),\n  \"tokens\"\
           : this.usage.total_tokens.or(0)\n}\n"
+    - mutation: "root.read_text = if this.exists(\"fixture_responses.read_text\")\
+        \ {\n  this.fixture_responses.read_text\n} else {\n  this.read_text\n}\n"
     - mutation: 'meta describe_start = timestamp_unix_milli()
 
         '
     - branch:
-        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
-          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
-          text\", \"text\": \"Describe this scene in one sentence, 15 words max.\"\
+        request_map: "let request = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n\
+          \    {\n      \"role\": \"user\",\n      \"content\": [\n        {\"type\"\
+          : \"text\", \"text\": \"Describe this scene in one sentence, 15 words max.\"\
           },\n        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,\"\
           \ + this.image_base64}}\n      ]\n    }\n  ],\n  \"max_tokens\": 32,\n \
-          \ \"temperature\": 0.1\n}\n"
+          \ \"temperature\": 0.1\n}\nroot = if this.exists(\"fixture_responses.describe\"\
+          ) {\n  deleted()\n} else {\n  $request\n}\n"
         processors:
         - http:
             url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
@@ -94,16 +102,19 @@ config:
         result_map: "root.describe = {\n  \"raw\": this.choices.index(0).message.content,\n\
           \  \"ms\": timestamp_unix_milli() - metadata(\"describe_start\"),\n  \"\
           tokens\": this.usage.total_tokens.or(0)\n}\n"
+    - mutation: "root.describe = if this.exists(\"fixture_responses.describe\") {\n\
+        \  this.fixture_responses.describe\n} else {\n  this.describe\n}\n"
     - mutation: 'meta safety_start = timestamp_unix_milli()
 
         '
     - branch:
-        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
-          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
-          text\", \"text\": \"Is this scene safe? Reply: safe OR alert: [reason].\
+        request_map: "let request = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n\
+          \    {\n      \"role\": \"user\",\n      \"content\": [\n        {\"type\"\
+          : \"text\", \"text\": \"Is this scene safe? Reply: safe OR alert: [reason].\
           \ Nothing else.\"},\n        {\"type\": \"image_url\", \"image_url\": {\"\
           url\": \"data:image/jpeg;base64,\" + this.image_base64}}\n      ]\n    }\n\
-          \  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\n"
+          \  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\nroot = if this.exists(\"\
+          fixture_responses.safety\") {\n  deleted()\n} else {\n  $request\n}\n"
         processors:
         - http:
             url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
@@ -115,6 +126,8 @@ config:
         result_map: "root.safety = {\n  \"raw\": this.choices.index(0).message.content,\n\
           \  \"ms\": timestamp_unix_milli() - metadata(\"safety_start\"),\n  \"tokens\"\
           : this.usage.total_tokens.or(0)\n}\n"
+    - mutation: "root.safety = if this.exists(\"fixture_responses.safety\") {\n  this.fixture_responses.safety\n\
+        } else {\n  this.safety\n}\n"
     - mapping: "# Parse detect labels\nlet detect_raw = this.detect.raw.trim()\nlet\
         \ detect_labels = $detect_raw.re_replace_all(\"[\\\\n\\\\r]\", \",\").split(\"\
         ,\").map_each(l -> l.trim().lowercase()).filter(l -> l.length() > 0)\n\n#\

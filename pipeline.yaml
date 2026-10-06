@@ -63,7 +63,7 @@ pipeline:
 
     - branch:
         request_map: |
-          root = {
+          let request = {
             "model": "gemma4",
             "messages": [
               {
@@ -76,6 +76,11 @@ pipeline:
             ],
             "max_tokens": 16,
             "temperature": 0.1
+          }
+          root = if this.exists("fixture_responses.detect") {
+            deleted()
+          } else {
+            $request
           }
         processors:
           - http:
@@ -92,6 +97,13 @@ pipeline:
             "tokens": this.usage.total_tokens.or(0)
           }
 
+    - mutation: |
+        root.detect = if this.exists("fixture_responses.detect") {
+          this.fixture_responses.detect
+        } else {
+          this.detect
+        }
+
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 2b: READ — OCR / text extraction                   │
     # │ "What does it say?" → comma-separated text strings      │
@@ -102,7 +114,7 @@ pipeline:
 
     - branch:
         request_map: |
-          root = {
+          let request = {
             "model": "gemma4",
             "messages": [
               {
@@ -115,6 +127,11 @@ pipeline:
             ],
             "max_tokens": 24,
             "temperature": 0.1
+          }
+          root = if this.exists("fixture_responses.read_text") {
+            deleted()
+          } else {
+            $request
           }
         processors:
           - http:
@@ -131,6 +148,13 @@ pipeline:
             "tokens": this.usage.total_tokens.or(0)
           }
 
+    - mutation: |
+        root.read_text = if this.exists("fixture_responses.read_text") {
+          this.fixture_responses.read_text
+        } else {
+          this.read_text
+        }
+
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 2c: DESCRIBE — Scene understanding                 │
     # │ "What's happening?" → one-sentence summary              │
@@ -141,7 +165,7 @@ pipeline:
 
     - branch:
         request_map: |
-          root = {
+          let request = {
             "model": "gemma4",
             "messages": [
               {
@@ -154,6 +178,11 @@ pipeline:
             ],
             "max_tokens": 32,
             "temperature": 0.1
+          }
+          root = if this.exists("fixture_responses.describe") {
+            deleted()
+          } else {
+            $request
           }
         processors:
           - http:
@@ -170,6 +199,13 @@ pipeline:
             "tokens": this.usage.total_tokens.or(0)
           }
 
+    - mutation: |
+        root.describe = if this.exists("fixture_responses.describe") {
+          this.fixture_responses.describe
+        } else {
+          this.describe
+        }
+
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 2d: SAFETY — Hazard judgment                       │
     # │ "Is this safe?" → safe / alert with reason              │
@@ -180,7 +216,7 @@ pipeline:
 
     - branch:
         request_map: |
-          root = {
+          let request = {
             "model": "gemma4",
             "messages": [
               {
@@ -193,6 +229,11 @@ pipeline:
             ],
             "max_tokens": 16,
             "temperature": 0.1
+          }
+          root = if this.exists("fixture_responses.safety") {
+            deleted()
+          } else {
+            $request
           }
         processors:
           - http:
@@ -208,6 +249,13 @@ pipeline:
             "ms": timestamp_unix_milli() - metadata("safety_start"),
             "tokens": this.usage.total_tokens.or(0)
           }
+
+    - mutation: |
+        root.safety = if this.exists("fixture_responses.safety") {
+          this.fixture_responses.safety
+        } else {
+          this.safety
+        }
 
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 3: Assemble structured multi-modal output          │

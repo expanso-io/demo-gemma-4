@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 INDEX = (ROOT / "web" / "static" / "index.html").read_text()
 SERVER = (ROOT / "web" / "server.py").read_text()
+RECORD = (ROOT / "web" / "static" / "record.html").read_text()
 EXPLORER = json.loads(
     (ROOT / "web" / "static" / "explorer.json").read_text()
 )
@@ -48,6 +49,13 @@ def test_copy_and_download_report_local_results():
         "Download failed",
     ):
         assert message in INDEX
+    assert "/static/explorer.json?download=" in INDEX
+
+
+def test_browser_check_can_open_the_explorer_directly():
+    assert "window.location.hash === '#explorer'" in INDEX
+    assert 'data-public-json="input"' in INDEX
+    assert 'data-public-json="output"' in INDEX
 
 
 def test_history_is_replayed_to_new_sse_connections():
@@ -62,3 +70,8 @@ def test_published_page_has_all_public_bar_sections():
         "deployInstructions",
     ):
         assert f'id="{selector_id}"' in INDEX
+
+
+def test_recording_surface_avoids_pure_white():
+    assert "#fff;" not in RECORD.lower()
+    assert "#ffffff" not in RECORD.lower()

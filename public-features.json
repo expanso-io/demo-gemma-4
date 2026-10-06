@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "features": [
+    {
+      "id": "capture",
+      "description": "Inspect the recorded capture envelope"
+    },
+    {
+      "id": "detect",
+      "description": "Inspect object detection input and output"
+    },
+    {
+      "id": "read",
+      "description": "Inspect text extraction input and output"
+    },
+    {
+      "id": "describe",
+      "description": "Inspect scene description input and output"
+    },
+    {
+      "id": "safety",
+      "description": "Inspect safety judgment input and output"
+    },
+    {
+      "id": "schema",
+      "description": "Inspect typed envelope assembly"
+    },
+    {
+      "id": "attest",
+      "description": "Inspect the in-toto provenance statement"
+    },
+    {
+      "id": "fanout",
+      "description": "Inspect stdout, JSONL, and dashboard delivery"
+    },
+    {
+      "id": "live-results",
+      "description": "View live multi-modal results and timing"
+    },
+    {
+      "id": "detection-history-replay",
+      "description": "Replay the latest ten detections to a new browser session"
+    },
+    {
+      "id": "provenance-details",
+      "description": "Expand the current Makoto L1 attestation"
+    },
+    {
+      "id": "architecture",
+      "description": "View the pipeline flow and deployment instructions"
+    }
+  ],
+  "routes": [
+    {"id": "home", "path": "/"},
+    {"id": "record", "path": "/record"},
+    {"id": "stream", "path": "/api/stream"}
+  ],
+  "controls": [
+    {"id": "theme-toggle", "selector": "#themeToggle"},
+    {"id": "live-tab", "selector": "[data-tab='live']"},
+    {"id": "explorer-tab", "selector": "[data-tab='explorer']"},
+    {"id": "architecture-tab", "selector": "[data-tab='arch']"},
+    {"id": "attestation-toggle", "selector": "#attestationToggle"},
+    {"id": "previous-stage", "selector": "[data-stage-action='previous']"},
+    {"id": "next-stage", "selector": "[data-stage-action='next']"},
+    {"id": "copy-stage-output", "selector": "[data-stage-action='copy']"}
+  ],
+  "downloads": [
+    {"id": "download-stage", "selector": "[data-stage-action='download']"}
+  ],
+  "browser_assertions": [
+    {
+      "id": "light-default",
+      "description": "The presenter opens in light mode"
+    },
+    {
+      "id": "dark-toggle",
+      "description": "The explicit toggle switches to the dark palette"
+    },
+    {
+      "id": "page-stages",
+      "description": "Left and Right page the explorer stages"
+    },
+    {
+      "id": "retain-scroll",
+      "description": "Stage paging keeps the explorer scroll position"
+    },
+    {
+      "id": "phone-width",
+      "description": "No page overflows at 320, 400, 768, or 1440 pixels"
+    },
+    {
+      "id": "wcag-aa",
+      "description": "Visible text passes WCAG AA contrast in both themes"
+    },
+    {
+      "id": "vertical-json",
+      "description": "Explorer JSON is valid and pretty-printed vertically"
+    },
+    {
+      "id": "local-feedback",
+      "description": "Copy and download report success and forced failure locally"
+    }
+  ]
+}

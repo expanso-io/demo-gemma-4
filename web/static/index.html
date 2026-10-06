@@ -1532,9 +1532,9 @@
         '</div>' +
         '<div class="stage-io">' +
           '<section class="io-panel"><div class="io-header">Input</div>' +
-            '<pre>' + esc(inputJson) + '</pre></section>' +
+            '<pre data-public-json="input">' + esc(inputJson) + '</pre></section>' +
           '<section class="io-panel"><div class="io-header">Output</div>' +
-            '<pre>' + esc(outputJson) + '</pre></section>' +
+            '<pre data-public-json="output">' + esc(outputJson) + '</pre></section>' +
         '</div>' +
         '<div class="stage-controls">' +
           '<button class="stage-action" type="button" data-stage-action="previous"' +
@@ -1575,11 +1575,18 @@
       }
     }
 
-    function downloadStage(stage) {
+    async function downloadStage(stage) {
       const status = document.getElementById('downloadStatus');
       status.className = 'control-status';
       try {
-        const blob = new Blob([JSON.stringify(stage, null, 2) + '\n'], {
+        const response = await fetch(
+          '/static/explorer.json?download=' + encodeURIComponent(stage.id)
+        );
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const record = await response.json();
+        const downloadedStage = record.stages.find(item => item.id === stage.id);
+        if (!downloadedStage) throw new Error('Stage not found');
+        const blob = new Blob([JSON.stringify(downloadedStage, null, 2) + '\n'], {
           type: 'application/json'
         });
         const url = URL.createObjectURL(blob);
@@ -1611,6 +1618,7 @@
     document.querySelectorAll('.tab-btn').forEach(button => {
       button.addEventListener('click', () => switchTab(button.dataset.tab));
     });
+    if (window.location.hash === '#explorer') switchTab('explorer');
     document.addEventListener('keydown', event => {
       if (!document.getElementById('tab-explorer').classList.contains('active')) return;
       if (event.target.matches('input, textarea, select')) return;

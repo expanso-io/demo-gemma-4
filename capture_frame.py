@@ -107,17 +107,12 @@ def _try_shared_frame():
 
 
 def main():
-    # ── Open camera ────────────────────────────────────────────
-    cap, source_label = open_camera()
-
-    # Warmup: let auto-exposure settle (skip for RTSP — already streaming)
-    warmup = 1 if CAMERA_URL else WARMUP_FRAMES
-    for _ in range(warmup):
-        cap.read()
+    cap = None
 
     # Graceful shutdown
     def shutdown(sig, frame):
-        cap.release()
+        if cap is not None:
+            cap.release()
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, shutdown)
@@ -125,6 +120,23 @@ def main():
 
     # ── Main loop: one trigger in → one frame out ──────────────
     for line in sys.stdin:
+        # The public fixture supplies its recorded frame envelope directly.
+        # Production triggers contain plain text and continue to camera capture.
+        try:
+            fixture = json.loads(line)
+        except json.JSONDecodeError:
+            fixture = None
+        if isinstance(fixture, dict) and fixture.get("image_base64"):
+            print(json.dumps(fixture, separators=(",", ":")), flush=True)
+            continue
+
+        if cap is None:
+            cap, _ = open_camera()
+            # Let auto-exposure settle. RTSP streams are already warm.
+            warmup = 1 if CAMERA_URL else WARMUP_FRAMES
+            for _ in range(warmup):
+                cap.read()
+
         # Direct camera capture (RTSP or USB — always preferred when available)
         ret, frame = cap.read()
         if not ret:
@@ -146,7 +158,8 @@ def main():
         print(json.dumps({"image_base64": b64}), flush=True)
 
     # ── Cleanup ────────────────────────────────────────────────
-    cap.release()
+    if cap is not None:
+        cap.release()
 
 
 if __name__ == "__main__":

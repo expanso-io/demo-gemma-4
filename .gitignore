@@ -28,3 +28,6 @@ finetune/label-review.md
 
 # Binary artifacts
 *.pptx
+
+# public-bar reports
+artifacts/
