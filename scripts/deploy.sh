@@ -3,8 +3,7 @@
 # Deploy pipeline to Expanso Cloud
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
-# Inlines pipeline.yaml into job.yaml and deploys
-# via expanso-cli. Run after any pipeline changes.
+# Renders pipeline.yaml into a current job spec and deploys it with expanso-cli.
 #
 # Usage:
 #   ./deploy.sh                    # deploy default job
@@ -14,25 +13,16 @@
 set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JOB_NAME="${1:-gemma4-vision-demo}"
+RUNTIME_DIR="${PROJECT_ROOT}/.runtime"
+JOB_PATH="${RUNTIME_DIR}/deploy-job.yaml"
 
 cd "$PROJECT_ROOT"
 
-python3 << 'PYEOF' > /tmp/_deploy_job.yaml
-import yaml, sys
-
-with open('pipeline.yaml') as f:
-    pipeline = yaml.safe_load(f)
-
-job = {
-    'name': 'gemma4-vision-demo',
-    'type': 'pipeline',
-    'count': 1,
-    'constraints': [{'key': 'host', 'operator': '=', 'values': ['mac']}],
-    'config': pipeline,
-}
-
-yaml.dump(job, sys.stdout, default_flow_style=False, allow_unicode=True)
-PYEOF
-
-expanso-cli job deploy /tmp/_deploy_job.yaml
-rm -f /tmp/_deploy_job.yaml
+mkdir -p "${RUNTIME_DIR}"
+uv run -s scripts/render-job.py \
+    --name "${JOB_NAME}" \
+    --output "${JOB_PATH}"
+expanso-edge validate "${JOB_PATH}"
+expanso-cli job validate "${JOB_PATH}"
+expanso-cli job deploy "${JOB_PATH}"
+rm -f "${JOB_PATH}"

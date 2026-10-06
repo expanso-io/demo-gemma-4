@@ -59,19 +59,59 @@ if ! command -v expanso-edge &>/dev/null; then
     exit 1
 fi
 
-if ! python3 -c "import cv2" 2>/dev/null; then
-    echo "  opencv-python not installed. Run: pip install opencv-python"
+if ! uv run -- python -c "import cv2" 2>/dev/null; then
+    echo "  opencv-python not installed. Run: uv sync"
     exit 1
 fi
 
 if ! curl -s --connect-timeout 3 "${INFERENCE_URL}/health" 2>/dev/null | grep -q "ok"; then
     echo "  Inference server not reachable at ${INFERENCE_URL}"
-    echo "   Start llama-server:  ./scripts/start-server.sh"
-    echo ""
-    echo "   Continuing anyway (will retry on each frame)..."
-    echo ""
+    echo "  Start llama-server: ./scripts/start-server.sh"
+    exit 1
 fi
 
 # ── Launch pipeline ───────────────────────────────────────
 cd "$SCRIPT_DIR"
-exec expanso-edge run pipeline.yaml
+RUNTIME_DIR="${SCRIPT_DIR}/.runtime/local-edge"
+EDGE_API_PORT="${EDGE_API_PORT:-18156}"
+EDGE_PID=""
+
+cleanup() {
+    if [[ -n "${EDGE_PID}" ]]; then
+        kill "${EDGE_PID}" 2>/dev/null || true
+        wait "${EDGE_PID}" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
+if lsof -nP -iTCP:"${EDGE_API_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "  Local Edge API port ${EDGE_API_PORT} is already in use"
+    exit 1
+fi
+
+mkdir -p "${RUNTIME_DIR}"
+uv run -s scripts/render-job.py --check
+expanso-edge run \
+    --local \
+    --no-watch \
+    --data-dir "${RUNTIME_DIR}" \
+    --api-listen "127.0.0.1:${EDGE_API_PORT}" &
+EDGE_PID=$!
+
+for _ in {1..80}; do
+    if curl -fsS \
+        "http://127.0.0.1:${EDGE_API_PORT}/api/v1/jobs" >/dev/null; then
+        break
+    fi
+    if ! kill -0 "${EDGE_PID}" 2>/dev/null; then
+        echo "  Expanso Edge stopped before its local API became ready"
+        exit 1
+    fi
+    sleep 0.1
+done
+
+curl -fsS "http://127.0.0.1:${EDGE_API_PORT}/api/v1/jobs" >/dev/null
+expanso-cli \
+    --endpoint "http://127.0.0.1:${EDGE_API_PORT}" \
+    job deploy scripts/job.yaml
+wait "${EDGE_PID}"

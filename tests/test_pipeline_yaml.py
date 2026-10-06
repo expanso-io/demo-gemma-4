@@ -63,6 +63,10 @@ class TestPipelineStructure:
         assert "MAX_FRAMES" in mapping
         assert '.or("3")' in mapping
 
+    def test_generate_emits_nonempty_capture_trigger(self, pipeline):
+        mapping = pipeline["input"]["generate"]["mapping"]
+        assert '"capture"' in mapping
+
 
 class TestSubprocessProcessor:
     """Test the subprocess (webcam capture) processor."""
@@ -245,11 +249,15 @@ class TestOutputBroker:
         file_outputs = [o for o in outputs if "file" in o]
         assert len(file_outputs) == 1
 
-    def test_file_output_is_daily_jsonl(self, pipeline):
+    def test_file_output_is_jsonl(self, pipeline):
         outputs = pipeline["output"]["broker"]["outputs"]
         file_out = [o for o in outputs if "file" in o][0]["file"]
         assert ".jsonl" in file_out["path"]
-        assert "ts_format" in file_out["path"]
+
+    def test_file_output_can_be_redirected_for_fixture_runs(self, pipeline):
+        outputs = pipeline["output"]["broker"]["outputs"]
+        file_out = [o for o in outputs if "file" in o][0]["file"]
+        assert "DETECTIONS_FILE" in file_out["path"]
 
     def test_file_output_uses_lines_codec(self, pipeline):
         outputs = pipeline["output"]["broker"]["outputs"]
@@ -261,3 +269,13 @@ class TestOutputBroker:
         outputs = pipeline["output"]["broker"]["outputs"]
         http_outputs = [o for o in outputs if "drop_on" in o or "http_client" in o]
         assert len(http_outputs) >= 1
+
+    def test_dashboard_output_retries_past_local_startup(self, pipeline):
+        outputs = pipeline["output"]["broker"]["outputs"]
+        dashboard = [
+            output["drop_on"]["output"]["http_client"]
+            for output in outputs
+            if "drop_on" in output
+        ][0]
+        assert dashboard["retries"] >= 10
+        assert dashboard["retry_period"] == "500ms"

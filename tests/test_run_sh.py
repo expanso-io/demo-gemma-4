@@ -93,8 +93,17 @@ class TestBannerOutput:
         assert "DESCRIBE" in script_content or "describe" in script_content
         assert "SAFETY" in script_content
 
-    def test_runs_pipeline_yaml(self, script_content):
-        assert "pipeline.yaml" in script_content
+    def test_runs_committed_job_generated_from_pipeline(self, script_content):
+        assert "scripts/render-job.py --check" in script_content
+        assert "scripts/job.yaml" in script_content
+
+    def test_runs_edge_in_local_mode_and_deploys_job(self, script_content):
+        assert "--local" in script_content
+        assert "job deploy scripts/job.yaml" in script_content
+
+    def test_python_checks_run_through_uv(self, script_content):
+        assert "uv run -- python" in script_content
+        assert "pip install" not in script_content
 
 
 class TestShellScriptSyntax:
@@ -110,6 +119,7 @@ class TestShellScriptSyntax:
         "scripts/mac-demo.sh",
         "scripts/run-edge.sh",
         "scripts/setup-dhcp-mac.sh",
+        "scripts/run-public-fixture.sh",
     ]
 
     @pytest.mark.parametrize("script", SHELL_SCRIPTS)

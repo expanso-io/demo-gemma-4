@@ -1,11 +1,180 @@
 name: gemma4-vision-demo
 type: pipeline
-count: 1
-constraints:
-  - key: host
-    operator: "="
-    values:
-      - mac
-pipeline:
-  source: inline
-  config: !include pipeline.yaml
+namespace: demo
+selector:
+  match_labels:
+    hardware: nvidia-jetson
+config:
+  input:
+    generate:
+      mapping: "root = if count(\"frames\") <= env(\"MAX_FRAMES\").or(\"3\").number()\
+        \ {\n  \"capture\"\n} else {\n  deleted()\n}\n"
+      interval: ${CAPTURE_INTERVAL:5s}
+  pipeline:
+    processors:
+    - subprocess:
+        name: uv
+        args:
+        - run
+        - -s
+        - capture_frame.py
+        max_buffer: 1048576
+    - mapping: 'root = content().string().parse_json()
+
+        '
+    - mapping: 'root = if this.exists("image_base64") { this } else { deleted() }
+
+        '
+    - log:
+        level: INFO
+        message: captured frame bytes=${! this.image_base64.length() } node=${! env("NODE_ID").or("edge-cam-001")
+          }
+    - mutation: 'meta detect_start = timestamp_unix_milli()
+
+        '
+    - branch:
+        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
+          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
+          text\", \"text\": \"Which of these objects are actually visible in this\
+          \ image: person, box, bottle, sign? List only the ones you can see, CSV.\
+          \ If none, reply: none\"},\n        {\"type\": \"image_url\", \"image_url\"\
+          : {\"url\": \"data:image/jpeg;base64,\" + this.image_base64}}\n      ]\n\
+          \    }\n  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\n"
+        processors:
+        - http:
+            url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
+            verb: POST
+            headers:
+              Content-Type: application/json
+            timeout: 30s
+            retries: 0
+        result_map: "root.detect = {\n  \"raw\": this.choices.index(0).message.content,\n\
+          \  \"ms\": timestamp_unix_milli() - metadata(\"detect_start\"),\n  \"tokens\"\
+          : this.usage.total_tokens.or(0)\n}\n"
+    - mutation: 'meta read_start = timestamp_unix_milli()
+
+        '
+    - branch:
+        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
+          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
+          text\", \"text\": \"Read all text visible in this image. Return only the\
+          \ text strings, comma-separated. If no text is visible, reply: none\"},\n\
+          \        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,\"\
+          \ + this.image_base64}}\n      ]\n    }\n  ],\n  \"max_tokens\": 24,\n \
+          \ \"temperature\": 0.1\n}\n"
+        processors:
+        - http:
+            url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
+            verb: POST
+            headers:
+              Content-Type: application/json
+            timeout: 30s
+            retries: 0
+        result_map: "root.read_text = {\n  \"raw\": this.choices.index(0).message.content,\n\
+          \  \"ms\": timestamp_unix_milli() - metadata(\"read_start\"),\n  \"tokens\"\
+          : this.usage.total_tokens.or(0)\n}\n"
+    - mutation: 'meta describe_start = timestamp_unix_milli()
+
+        '
+    - branch:
+        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
+          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
+          text\", \"text\": \"Describe this scene in one sentence, 15 words max.\"\
+          },\n        {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,\"\
+          \ + this.image_base64}}\n      ]\n    }\n  ],\n  \"max_tokens\": 32,\n \
+          \ \"temperature\": 0.1\n}\n"
+        processors:
+        - http:
+            url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
+            verb: POST
+            headers:
+              Content-Type: application/json
+            timeout: 30s
+            retries: 0
+        result_map: "root.describe = {\n  \"raw\": this.choices.index(0).message.content,\n\
+          \  \"ms\": timestamp_unix_milli() - metadata(\"describe_start\"),\n  \"\
+          tokens\": this.usage.total_tokens.or(0)\n}\n"
+    - mutation: 'meta safety_start = timestamp_unix_milli()
+
+        '
+    - branch:
+        request_map: "root = {\n  \"model\": \"gemma4\",\n  \"messages\": [\n    {\n\
+          \      \"role\": \"user\",\n      \"content\": [\n        {\"type\": \"\
+          text\", \"text\": \"Is this scene safe? Reply: safe OR alert: [reason].\
+          \ Nothing else.\"},\n        {\"type\": \"image_url\", \"image_url\": {\"\
+          url\": \"data:image/jpeg;base64,\" + this.image_base64}}\n      ]\n    }\n\
+          \  ],\n  \"max_tokens\": 16,\n  \"temperature\": 0.1\n}\n"
+        processors:
+        - http:
+            url: ${INFERENCE_URL:http://localhost:8081}/v1/chat/completions
+            verb: POST
+            headers:
+              Content-Type: application/json
+            timeout: 30s
+            retries: 0
+        result_map: "root.safety = {\n  \"raw\": this.choices.index(0).message.content,\n\
+          \  \"ms\": timestamp_unix_milli() - metadata(\"safety_start\"),\n  \"tokens\"\
+          : this.usage.total_tokens.or(0)\n}\n"
+    - mapping: "# Parse detect labels\nlet detect_raw = this.detect.raw.trim()\nlet\
+        \ detect_labels = $detect_raw.re_replace_all(\"[\\\\n\\\\r]\", \",\").split(\"\
+        ,\").map_each(l -> l.trim().lowercase()).filter(l -> l.length() > 0)\n\n#\
+        \ Parse read text\nlet read_raw = this.read_text.raw.trim()\n\n# Parse describe\n\
+        let describe_raw = this.describe.raw.trim()\n\n# Parse safety\nlet safety_raw\
+        \ = this.safety.raw.trim()\nlet is_safe = !$safety_raw.lowercase().contains(\"\
+        alert\")\n\n# ━━ ENVELOPE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nroot.timestamp\
+        \ = now().ts_format(\"2006-01-02T15:04:05.000Z07:00\")\nroot.node_id = env(\"\
+        NODE_ID\").or(\"edge-cam-001\")\nroot.pipeline_version = env(\"PIPELINE_VERSION\"\
+        ).or(\"2.0.0\")\nroot.model = \"gemma4-e2b-q4\"\nroot.frame_id = uuid_v4()\n\
+        root.mode = \"multi\"\n\n# ━━ FOUR ANALYSES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\
+        root.detect = {\n  \"labels\": $detect_labels,\n  \"count\": $detect_labels.length(),\n\
+        \  \"ms\": this.detect.ms,\n  \"tokens\": this.detect.tokens\n}\n\nroot.read_text\
+        \ = {\n  \"text\": $read_raw,\n  \"ms\": this.read_text.ms,\n  \"tokens\"\
+        : this.read_text.tokens\n}\n\nroot.describe = {\n  \"summary\": $describe_raw,\n\
+        \  \"ms\": this.describe.ms,\n  \"tokens\": this.describe.tokens\n}\n\nroot.safety\
+        \ = {\n  \"safe\": $is_safe,\n  \"risk\": if $is_safe { 1 } else { 3 },\n\
+        \  \"detail\": $safety_raw,\n  \"ms\": this.safety.ms,\n  \"tokens\": this.safety.tokens\n\
+        }\n\n# ━━ TOTALS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nroot.total_ms\
+        \ = this.detect.ms + this.read_text.ms + this.describe.ms + this.safety.ms\n\
+        root.total_tokens = this.detect.tokens + this.read_text.tokens + this.describe.tokens\
+        \ + this.safety.tokens\n\n# ━━ DATA INTEGRITY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\
+        root.integrity = {\n  \"frame_sha256\": this.image_base64.hash(\"sha256\"\
+        ).encode(\"hex\")\n}\n"
+    - mutation: "root.attestation = {\n  \"_type\": \"https://in-toto.io/Statement/v1\"\
+        ,\n  \"subject\": [{\n    \"name\": \"multimodal:\" + this.frame_id,\n   \
+        \ \"digest\": {\n      \"sha256\": this.integrity.frame_sha256,\n      \"\
+        recordCount\": \"4\"\n    }\n  }],\n  \"predicateType\": \"https://makoto.dev/transform/v1\"\
+        ,\n  \"predicate\": {\n    \"inputs\": [{\n      \"name\": \"webcam-frame:\"\
+        \ + this.frame_id,\n      \"digest\": { \"sha256\": this.integrity.frame_sha256\
+        \ }\n    }],\n    \"transform\": {\n      \"type\": \"https://makoto.dev/transforms/vision-inference\"\
+        ,\n      \"name\": \"multi-modal\",\n      \"version\": this.pipeline_version,\n\
+        \      \"parameters\": {\n        \"model\": this.model,\n        \"modes\"\
+        : [\"detect\", \"read_text\", \"describe\", \"safety\"],\n        \"temperature\"\
+        : 0.1\n      },\n      \"codeRef\": {\n        \"uri\": \"https://github.com/expanso-io/demo-gemma-4\"\
+        ,\n        \"pipeline\": \"pipeline.yaml\"\n      }\n    },\n    \"executor\"\
+        : {\n      \"id\": \"expanso-edge://\" + this.node_id,\n      \"platform\"\
+        : \"expanso-edge\"\n    },\n    \"metadata\": {\n      \"processedOn\": this.timestamp,\n\
+        \      \"processingMs\": this.total_ms\n    }\n  }\n}\n"
+    - log:
+        level: INFO
+        message: completed frame=${! this.frame_id } analyses=4 bytes=${! this.string().length()
+          } elapsed_ms=${! this.total_ms }
+  output:
+    broker:
+      pattern: fan_out
+      outputs:
+      - stdout:
+          codec: lines
+      - file:
+          path: ${DETECTIONS_FILE:./detections/gemma4.jsonl}
+          codec: lines
+      - drop_on:
+          error: true
+          output:
+            http_client:
+              url: ${DASHBOARD_URL:http://localhost:9090}/api/detection
+              verb: POST
+              headers:
+                Content-Type: application/json
+              retries: 12
+              retry_period: 500ms
+              max_in_flight: 1

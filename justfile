@@ -7,10 +7,21 @@ test:
     uv run pytest -q
 
 lint:
-    uv run ruff check finetune/label_frames.py finetune/review_labels.py
+    uv run ruff check \
+        finetune/label_frames.py \
+        finetune/review_labels.py \
+        scripts/assert-public-fixture.py \
+        scripts/fixture_server.py \
+        scripts/render-job.py
 
 validate:
-    expanso-edge validate pipeline.yaml
+    expanso-edge validate pipeline.yaml scripts/job.yaml
+
+job-check:
+    uv run -s scripts/render-job.py --check
+
+fixture-run:
+    ./scripts/run-public-fixture.sh
 
 provider-check:
     @uv run -s ../_demo-kit/lint-demo-providers.py .
@@ -41,4 +52,4 @@ gateway-status:
 review-labels:
     uv run finetune/review_labels.py
 
-check: lint test validate provider-check
+check: lint test validate job-check provider-check

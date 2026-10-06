@@ -24,7 +24,7 @@ input:
   generate:
     mapping: |
       root = if count("frames") <= env("MAX_FRAMES").or("3").number() {
-        ""
+        "capture"
       } else {
         deleted()
       }
@@ -47,6 +47,12 @@ pipeline:
 
     - mapping: |
         root = if this.exists("image_base64") { this } else { deleted() }
+
+    - log:
+        level: INFO
+        message: >-
+          captured frame bytes=${! this.image_base64.length() }
+          node=${! env("NODE_ID").or("edge-cam-001") }
 
     # ┌─────────────────────────────────────────────────────────┐
     # │ Step 2a: DETECT — Object classification                 │
@@ -310,6 +316,12 @@ pipeline:
           }
         }
 
+    - log:
+        level: INFO
+        message: >-
+          completed frame=${! this.frame_id } analyses=4
+          bytes=${! this.string().length() } elapsed_ms=${! this.total_ms }
+
 # ── Output: Fan out to multiple destinations ───────────────────
 output:
   broker:
@@ -319,7 +331,7 @@ output:
           codec: lines
 
       - file:
-          path: './detections/${! now().ts_format("2006-01-02") }.jsonl'
+          path: "${DETECTIONS_FILE:./detections/gemma4.jsonl}"
           codec: lines
 
       - drop_on:
@@ -330,5 +342,6 @@ output:
               verb: POST
               headers:
                 Content-Type: application/json
-              retries: 0
+              retries: 12
+              retry_period: 500ms
               max_in_flight: 1
