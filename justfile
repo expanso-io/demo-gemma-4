@@ -3,6 +3,65 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 _default:
     @just --list
 
+# Start inference server (if none answers), dashboard on :9090, and pipeline.
+up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -f .env ]]; then set -a; source .env; set +a; fi
+    mkdir -p .runtime
+    url="${INFERENCE_URL:-http://localhost:8081}"
+    if ! curl -fsS --connect-timeout 3 "$url/health" 2>/dev/null | grep -q ok; then
+        touch .runtime/started-inference
+        ./scripts/start-server.sh
+    fi
+    nohup uv run web/server.py > .runtime/dashboard.log 2>&1 &
+    echo $! > .runtime/dashboard.pid
+    for _ in {1..100}; do
+        curl -fsS -o /dev/null http://127.0.0.1:${PORT:-9090}/ 2>/dev/null && break
+        sleep 0.2
+    done
+    curl -fsS -o /dev/null http://127.0.0.1:${PORT:-9090}/
+    nohup ./run.sh > .runtime/pipeline.log 2>&1 &
+    echo $! > .runtime/pipeline.pid
+    sleep 5
+    if ! kill -0 "$(cat .runtime/pipeline.pid)" 2>/dev/null; then
+        tail -20 .runtime/pipeline.log
+        echo "FAIL: pipeline stopped; see .runtime/pipeline.log, then just down"
+        exit 1
+    fi
+    echo "dashboard on http://localhost:${PORT:-9090} (just down stops everything)"
+
+# Stop everything up started and fail unless its ports are free.
+down:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    if [[ -f .env ]]; then set -a; source .env; set +a; fi
+    for name in pipeline dashboard; do
+        if [[ -f .runtime/$name.pid ]]; then
+            kill "$(cat .runtime/$name.pid)" 2>/dev/null || true
+            rm -f .runtime/$name.pid
+        fi
+    done
+    ports="${PORT:-9090} ${EDGE_API_PORT:-18156}"
+    if [[ -f .runtime/started-inference ]]; then
+        ./scripts/start-server.sh stop || true
+        rm -f .runtime/started-inference
+        ports="$ports ${LLAMA_PORT:-8081}"
+    fi
+    just gateway-down
+    # run.sh keeps its local Edge job here; a stale copy refuses the next deploy.
+    rm -rf .runtime/local-edge
+    for _ in {1..40}; do
+        busy=""
+        for port in $ports; do
+            lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && busy="$busy $port"
+        done
+        [[ -z "$busy" ]] && break
+        sleep 0.2
+    done
+    if [[ -n "$busy" ]]; then echo "FAIL: still listening on$busy"; exit 1; fi
+    echo "down: ports $ports are free"
+
 test:
     uv run pytest -q
 
@@ -53,3 +112,17 @@ review-labels:
     uv run finetune/review_labels.py
 
 check: lint test validate job-check provider-check
+
+# everything that must be true before a take: gates + live dashboard + checklist
+record-check: check
+    curl -fsS "http://localhost:9090/" > /dev/null || { echo "FAIL: dashboard not reachable — just up first"; exit 1; }
+    @echo ""
+    @echo "RECORD CHECKLIST"
+    @echo "  [ ] demo-guidance/RECORDING.md read; RECORDING_SCRIPT.md setup done"
+    @echo "  [ ] Opera, no browser chrome in frame"
+    @echo "  [ ] one frame already processed so the structure is visible"
+    @echo "  [ ] RECORDING_PREFLIGHT.md warnings reviewed"
+
+# human story/proof declaration; validates only and never starts anything
+recording-preflight:
+    @uv run -s ../_demo-kit/recording-preflight.py .

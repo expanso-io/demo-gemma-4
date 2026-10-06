@@ -43,37 +43,29 @@ cp .env.example .env
 # Set CAMERA_URL for an IP camera, or leave it empty for a USB camera.
 ```
 
-### 2. Start the inference server
+### 2. Start and stop
 
 ```bash
-# Option A: llama.cpp (Jetson / dedicated GPU)
-./scripts/start-server.sh
-
-# Option B: Ollama (Mac / desktop)
-ollama serve
+just up
+just down
 ```
 
-### 3. Run the pipeline
-
-```bash
-./run.sh
-```
-
-`run.sh` starts a local Expanso Edge agent, submits the committed job, and
-writes one JSON envelope per frame to stdout and `detections/gemma4.jsonl`.
-Every envelope includes the frame digest, four analysis records, and a
+`just up` uses the Gemma 4 inference server at `INFERENCE_URL` when one
+answers. Otherwise it starts llama.cpp with the Gemma 4 E2B model (Jetson or
+dedicated GPU); on a Mac or desktop, run Ollama and point `INFERENCE_URL` at
+it first. It then starts the dashboard at http://localhost:9090 and the
+pipeline, which runs a local Expanso Edge agent, submits the committed job,
+and writes one JSON envelope per frame to `detections/gemma4.jsonl`. Every
+envelope includes the frame digest, four analysis records, and a
 [Makoto](https://usemakoto.dev) provenance attestation.
-
-### 4. Open the dashboard
-
-```bash
-uv run web/server.py
-# → http://localhost:9090
-```
 
 The dashboard shows the live feed, the current Gemma 4 result, and detection
 history. A new browser connection receives the last ten detections before live
 updates begin. The `/record` page captures frames by label for fine-tuning.
+
+`just down` stops the pipeline, the dashboard, and any inference server
+`just up` started, clears the local Edge job state, and fails unless their
+ports are free.
 
 ### Reproduce the checked-in verification
 
@@ -154,7 +146,7 @@ demo-gemma-4/
 ├── model-gateway.toml         # Fixture-first text review gateway
 ├── fixtures/model/            # Recorded review for zero-call rehearsal
 ├── capture_frame.py           # Webcam → base64 JSON (subprocess)
-├── run.sh                     # Pipeline launcher
+├── run.sh                     # Pipeline launcher (called by just up)
 ├── .env.example               # All configurable environment variables
 ├── requirements.txt           # Python dependencies
 │
