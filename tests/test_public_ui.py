@@ -24,6 +24,7 @@ def test_explorer_covers_every_pipeline_stage():
     for stage in EXPLORER["stages"]:
         assert stage["input"]
         assert stage["output"]
+        assert f'data-stage-id="{stage["id"]}"' in INDEX
 
 
 def test_light_is_default_and_dark_has_explicit_toggle():
@@ -51,3 +52,13 @@ def test_copy_and_download_report_local_results():
 
 def test_history_is_replayed_to_new_sse_connections():
     assert "reversed(recent_detections[-10:])" in SERVER
+
+
+def test_published_page_has_all_public_bar_sections():
+    for selector_id in (
+        "explanation",
+        "stageExplorer",
+        "runInstructions",
+        "deployInstructions",
+    ):
+        assert f'id="{selector_id}"' in INDEX

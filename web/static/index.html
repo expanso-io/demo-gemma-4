@@ -829,6 +829,42 @@
       text-overflow: ellipsis;
     }
 
+    .arch-instructions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 0 32px;
+    }
+    .arch-instruction {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-surface);
+      padding: 18px;
+    }
+    .arch-instruction h3 {
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+    .arch-instruction p {
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    .arch-instruction pre {
+      max-width: 100%;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-base);
+      padding: 10px;
+      color: var(--text-primary);
+      font: 13px/1.55 var(--font-mono);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
     /* ── Footer ─────────────────────────── */
     .footer {
       padding: 12px 0;
@@ -863,6 +899,7 @@
       .history-row .desc { display: none; }
       .stage-io { grid-template-columns: 1fr; }
       .explorer-heading, .stage-title-row { align-items: flex-start; flex-direction: column; }
+      .arch-instructions { grid-template-columns: 1fr; }
       .footer { flex-wrap: wrap; gap: 6px 12px; }
     }
   </style>
@@ -999,7 +1036,24 @@
           </div>
           <span class="explorer-count" id="explorerCount">Loading stages</span>
         </div>
-        <nav class="stage-rail" id="stageRail" aria-label="Pipeline stages"></nav>
+        <nav class="stage-rail" id="stageRail" aria-label="Pipeline stages">
+          <button class="stage-dot" type="button" data-stage-id="capture"
+            aria-current="step" aria-label="1. Capture">1</button>
+          <button class="stage-dot" type="button" data-stage-id="detect"
+            aria-label="2. Detect">2</button>
+          <button class="stage-dot" type="button" data-stage-id="read"
+            aria-label="3. Read">3</button>
+          <button class="stage-dot" type="button" data-stage-id="describe"
+            aria-label="4. Describe">4</button>
+          <button class="stage-dot" type="button" data-stage-id="safety"
+            aria-label="5. Safety">5</button>
+          <button class="stage-dot" type="button" data-stage-id="schema"
+            aria-label="6. Schema">6</button>
+          <button class="stage-dot" type="button" data-stage-id="attest"
+            aria-label="7. Attest">7</button>
+          <button class="stage-dot" type="button" data-stage-id="fanout"
+            aria-label="8. Fan-out">8</button>
+        </nav>
         <article class="stage-card" id="stageCard" aria-live="polite">
           <p>Loading the verification record...</p>
         </article>
@@ -1010,7 +1064,7 @@
     <div class="tab-content" id="tab-arch" role="tabpanel"
       aria-labelledby="tab-button-arch">
 
-      <div class="arch-hero">
+      <div class="arch-hero" id="explanation">
         <h2>One Frame. Four <span class="gemma">Gemma 4</span> Analyses.<br>Shipped by <span class="edge">Expanso Edge</span>.</h2>
         <p>Every frame passes through four sequential inference modes, gets structured into a typed schema, receives a provenance attestation, and fans out to three configured outputs.</p>
       </div>
@@ -1117,11 +1171,34 @@
         </div>
       </div>
 
+      <div class="arch-instructions">
+        <section class="arch-instruction" id="runInstructions">
+          <h3>Run the checked fixture</h3>
+          <p>
+            Replay one bounded frame through Expanso Edge and compare the
+            JSONL output with the dashboard receipt. This path makes no model
+            call.
+          </p>
+          <pre><code>just fixture-run</code></pre>
+        </section>
+        <section class="arch-instruction" id="deployInstructions">
+          <h3>Deploy from Expanso Cloud</h3>
+          <p>
+            Install the Jetson node label, start its Cloud-connected Edge
+            agent, then deploy the generated job from an authenticated operator
+            machine.
+          </p>
+          <pre><code>./scripts/setup-jetson.sh
+./scripts/demo-ctl start
+./scripts/deploy.sh</code></pre>
+        </section>
+      </div>
+
     </div><!-- /tab-arch -->
 
     <!-- Footer -->
     <footer class="footer">
-      <span>Sees, Reads, Thinks — on the edge</span>
+      <span>Sees, Reads, Thinks: on the edge</span>
       <span>Provenance: <a href="https://usemakoto.dev" target="_blank">Makoto L1</a></span>
       <span><a href="https://cloud.expanso.io" target="_blank">cloud.expanso.io</a></span>
     </footer>
@@ -1131,7 +1208,7 @@
   <script>
     let cycleCount = 0;
     let lastDetectionTime = null;
-    let cycleInterval = 5; // seconds — matches CAPTURE_INTERVAL
+    let cycleInterval = 5; // seconds; matches CAPTURE_INTERVAL
     let timerHandle = null;
     let explorerStages = [];
     let explorerIndex = 0;
@@ -1308,7 +1385,7 @@
             '</div>' +
             riskMeter +
             '<div class="safety-detail">risk: ' + risk + '/5' +
-              ((!safe && detail) ? ' — ' + esc(detail) : '') +
+              ((!safe && detail) ? ': ' + esc(detail) : '') +
             '</div>' +
           '</div>';
 
@@ -1422,6 +1499,7 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'stage-dot';
+        button.dataset.stageId = stage.id;
         button.textContent = index + 1;
         button.setAttribute('aria-label', (index + 1) + '. ' + stage.name);
         button.addEventListener('click', () => renderStage(index));
