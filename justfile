@@ -1,3 +1,10 @@
+export MODEL_GATEWAY_URL := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound | jq -r '"http://127.0.0.1:" + (.GATEWAY_PORT|tostring)'`
+export PORT := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound --format json | jq -r .PORT`
+export EDGE_API_PORT := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound --format json | jq -r .EDGE_API_PORT`
+export LLAMA_PORT := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound --format json | jq -r .LLAMA_PORT`
+export GATEWAY_PORT := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound --format json | jq -r .GATEWAY_PORT`
+export PUBLIC_DASHBOARD_PORT := `uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound --format json | jq -r .PUBLIC_DASHBOARD_PORT`
+
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 _default:
@@ -52,12 +59,14 @@ _restart-mac:
     just _up-mac
 
 # Start inference server (if none answers), dashboard on :9090, and pipeline.
-_up-mac:
+_up-mac: ports-preflight
     #!/usr/bin/env bash
     set -euo pipefail
     if [[ -f .env ]]; then set -a; source .env; set +a; fi
+    source scripts/port-env.sh
+    demo_ports_load "$PWD" --allow-bound
     mkdir -p .runtime
-    url="${INFERENCE_URL:-http://localhost:8081}"
+    url="${INFERENCE_URL:-http://localhost:$LLAMA_PORT}"
     if ! curl -fsS --connect-timeout 3 "$url/health" 2>/dev/null | grep -q ok; then
         touch .runtime/started-inference
         ./scripts/start-server.sh
@@ -84,6 +93,8 @@ _down-mac:
     #!/usr/bin/env bash
     set -uo pipefail
     if [[ -f .env ]]; then set -a; source .env; set +a; fi
+    source scripts/port-env.sh
+    demo_ports_load "$PWD" --allow-bound
     for name in pipeline dashboard; do
         if [[ -f .runtime/$name.pid ]]; then
             kill "$(cat .runtime/$name.pid)" 2>/dev/null || true
@@ -135,16 +146,17 @@ provider-check:
 
 gateway-up:
     #!/usr/bin/env bash
+    uv run --no-project scripts/demo-ports.py resolve --demo-dir . --service GATEWAY_PORT >/dev/null
     mkdir -p .runtime
     nohup uv run -s ../_demo-kit/model-gateway.py serve \
-        --config model-gateway.toml > .runtime/gateway.log 2>&1 &
+        --config model-gateway.toml --port "$GATEWAY_PORT" > .runtime/gateway.log 2>&1 &
     echo $! > .runtime/gateway.pid
     for attempt in 1 2 3 4 5; do
-        curl -fsS http://127.0.0.1:18153/status >/dev/null && break
+        curl -fsS http://127.0.0.1:${GATEWAY_PORT}/status >/dev/null && break
         sleep 1
     done
-    curl -fsS http://127.0.0.1:18153/status >/dev/null
-    echo "model gateway on http://127.0.0.1:18153 (${GATEWAY_MODE:-fixture})"
+    curl -fsS http://127.0.0.1:${GATEWAY_PORT}/status >/dev/null
+    echo "model gateway on http://127.0.0.1:${GATEWAY_PORT} (${GATEWAY_MODE:-fixture})"
 
 gateway-down:
     #!/usr/bin/env bash
@@ -154,7 +166,7 @@ gateway-down:
     fi
 
 gateway-status:
-    @uv run -s ../_demo-kit/model-gateway.py status --config model-gateway.toml
+    @uv run -s ../_demo-kit/model-gateway.py status --config model-gateway.toml --port "$GATEWAY_PORT"
 
 review-labels:
     uv run finetune/review_labels.py
@@ -163,7 +175,7 @@ check: lint test validate job-check provider-check
 
 # everything that must be true before a take: gates + live dashboard + checklist
 record-check: check
-    curl -fsS "http://localhost:9090/" > /dev/null || { echo "FAIL: dashboard not reachable — just up first"; exit 1; }
+    curl -fsS "http://localhost:${PORT}/" > /dev/null || { echo "FAIL: dashboard not reachable — just up first"; exit 1; }
     @echo ""
     @echo "RECORD CHECKLIST"
     @echo "  [ ] demo-guidance/RECORDING.md read; RECORDING_SCRIPT.md setup done"
@@ -174,3 +186,9 @@ record-check: check
 # human story/proof declaration; validates only and never starts anything
 recording-preflight:
     @uv run -s ../_demo-kit/recording-preflight.py .
+
+ports:
+    @uv run --no-project scripts/demo-ports.py resolve --demo-dir . --allow-bound
+
+ports-preflight:
+    @uv run --no-project scripts/demo-ports.py resolve --demo-dir . --service PORT --service EDGE_API_PORT --service LLAMA_PORT >/dev/null

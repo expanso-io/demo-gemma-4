@@ -23,7 +23,11 @@ if [ -f "${PROJECT_ROOT}/.env" ]; then
     set +a
 fi
 
+source "$PROJECT_ROOT/scripts/port-env.sh"
+demo_ports_load "$PROJECT_ROOT" --allow-bound
+
 exec expanso-edge run \
     --data-dir "${EDGE_DIR}" \
+    --api-listen "127.0.0.1:$EDGE_API_PORT" \
     --config "${EDGE_DIR}/config.d" \
     "$@"

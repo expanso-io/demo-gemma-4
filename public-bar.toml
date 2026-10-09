@@ -12,8 +12,8 @@ run_selector = "#runInstructions"
 deploy_selector = "#deployInstructions"
 
 [browser]
-url = "http://127.0.0.1:19090/#explorer"
-ready_url = "http://127.0.0.1:19090/"
+url = "http://127.0.0.1:24204/#explorer"
+ready_url = "http://127.0.0.1:24204/"
 start_command = ["./scripts/public-dashboard.sh", "start"]
 stop_command = ["./scripts/public-dashboard.sh", "stop"]
 theme_toggle_selector = "#themeToggle"

@@ -17,8 +17,13 @@ set -euo pipefail
 MODEL_DIR="${HOME}/models/gemma4-demo"
 LLAMA_SERVER="/opt/llama-server/llama-server"
 LLAMA_SERVER_LEGACY="/tmp/llama.cpp/build/bin/llama-server"
-PORT="${LLAMA_PORT:-8081}"
-LOG="/tmp/llama-server.log"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/port-env.sh"
+demo_ports_load "$PROJECT_ROOT" --allow-bound
+PORT="$LLAMA_PORT"
+mkdir -p "$PROJECT_ROOT/.runtime"
+LOG="$PROJECT_ROOT/.runtime/llama-server.log"
+PID_FILE="$PROJECT_ROOT/.runtime/llama-server.pid"
 
 # Prefer persistent install, fall back to /tmp build
 if [ ! -x "$LLAMA_SERVER" ] && [ -x "$LLAMA_SERVER_LEGACY" ]; then
@@ -29,7 +34,15 @@ else
 fi
 
 stop_server() {
-    pkill -f "llama-server.*gemma" 2>/dev/null && echo "Stopped." || echo "Not running."
+    if [[ -f "$PID_FILE" ]]; then
+        local pid command
+        pid="$(cat "$PID_FILE")"
+        command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+        if [[ "$command" == *"llama-server"* && "$command" == *"--port $PORT"* ]]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$PID_FILE"
+    fi
 }
 
 start_server() {
@@ -52,6 +65,7 @@ start_server() {
         --flash-attn true \
         --reasoning off \
         > "${LOG}" 2>&1 &
+    echo $! > "$PID_FILE"
 
     echo "Waiting for model to load..."
     for i in $(seq 1 30); do

@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PID_FILE="${ROOT}/.runtime/public-dashboard.pid"
-PORT=19090
+source "$ROOT/scripts/port-env.sh"
+demo_ports_load "$ROOT" --allow-bound
+PORT="$PUBLIC_DASHBOARD_PORT"
 
 stop_dashboard() {
     if [[ ! -f "${PID_FILE}" ]]; then
