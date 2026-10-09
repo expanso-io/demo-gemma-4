@@ -44,6 +44,7 @@ import tempfile
 import time
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -411,7 +412,78 @@ def load_manifest(
             )
         return None
     audit.add(1, "manifest-schema", True, "public-bar.toml matches schema version 1")
-    return manifest
+    return resolve_manifest_urls(repo, manifest)
+
+
+def resolve_manifest_urls(repo: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    """Resolve only declared localhost URL ports; fixture-only ports stay literal."""
+    declaration = repo / "ports.json"
+    if not declaration.is_file():
+        return manifest
+    allocator = repo / "scripts" / "demo-ports.py"
+    if not allocator.is_file():
+        allocator = Path(__file__).with_name("demo-ports.py")
+    if not allocator.is_file():
+        raise ValueError("ports.json requires the vendored DemoKit allocator")
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--no-project",
+            str(allocator),
+            "resolve",
+            "--demo-dir",
+            str(repo),
+            "--allow-bound",
+            "--format",
+            "json",
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assigned = json.loads(result.stdout)
+    declaration_data = load_json(declaration)
+    if declaration_data.get("version") == 1:
+        preferences = next(iter(declaration_data["demos"].values()))["ports"]
+    else:
+        preferences = declaration_data["ports"]
+    remap: dict[int, int] = {}
+    ambiguous: set[int] = set()
+    for name, preferred in preferences.items():
+        if preferred is None:
+            continue
+        if preferred in remap and remap[preferred] != assigned[name]:
+            ambiguous.add(preferred)
+        remap[preferred] = assigned[name]
+
+    def resolved(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: resolved(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolved(item) for item in value]
+        if not isinstance(value, str) or not value.startswith(("http://", "https://")):
+            return value
+        expanded = re.sub(
+            r"(?<=:)\$\{([A-Z][A-Z0-9_]*)\}(?=[/?#]|$)",
+            lambda match: str(assigned[match[1]]) if match[1] in assigned else match[0],
+            value,
+        )
+        url = urllib.parse.urlsplit(expanded)
+        if url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return value
+        if expanded != value:
+            return expanded
+        if url.port in ambiguous:
+            raise ValueError(f"ambiguous declared URL port: {url.port}")
+        port = remap.get(url.port)
+        if port is None:
+            return value
+        host = f"[{url.hostname}]" if url.hostname == "::1" else url.hostname
+        return urllib.parse.urlunsplit(url._replace(netloc=f"{host}:{port}"))
+
+    return resolved(manifest)
 
 
 def run_checked(
@@ -2182,8 +2254,10 @@ def browser_lane(repo: Path, manifest: dict[str, Any], audit: Audit) -> None:
 
 def teardown_only(repo: Path, manifest_path: Path) -> int:
     try:
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as error:
+        manifest = resolve_manifest_urls(
+            repo, tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+        )
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"FAIL: cannot read teardown commands: {error}", file=sys.stderr)
         return 1
     failures: list[str] = []
