@@ -304,3 +304,7 @@ gitleaks git --no-banner
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
+
+`just ports` shows persistent local allocations declared in `ports.json`.
+Stopping the demo retains the assignments, so restarting keeps the same URL.
+An occupied existing assignment fails without silently changing the URL.

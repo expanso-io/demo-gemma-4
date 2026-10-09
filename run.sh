@@ -22,9 +22,12 @@ if [ -f "${SCRIPT_DIR}/.env" ]; then
     set +a
 fi
 
+source "$SCRIPT_DIR/scripts/port-env.sh"
+demo_ports_load "$SCRIPT_DIR" --allow-bound
+
 # ── Configurable defaults ─────────────────────────────────
 export NODE_ID="${NODE_ID:-edge-cam-001}"
-export INFERENCE_URL="${INFERENCE_URL:-http://localhost:8081}"
+export INFERENCE_URL="${INFERENCE_URL:-http://localhost:$LLAMA_PORT}"
 export CAPTURE_INTERVAL="${CAPTURE_INTERVAL:-12s}"
 export MAX_FRAMES="${MAX_FRAMES:-3}"
 export PIPELINE_VERSION="${PIPELINE_VERSION:-2.0.0}"

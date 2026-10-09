@@ -31,3 +31,5 @@ finetune/label-review.md
 
 # public-bar reports
 artifacts/
+
+.demo-port-state.json*

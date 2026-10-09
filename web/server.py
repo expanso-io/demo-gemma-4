@@ -448,7 +448,7 @@ def main():
     print(f"[watcher] Watching {DETECTIONS_DIR}/ for JSONL output")
     print(f"[recording] Frames will be saved to {RECORDINGS_DIR}/")
 
-    server = ThreadedHTTPServer(("0.0.0.0", PORT), DashboardHandler)
+    server = ThreadedHTTPServer(("127.0.0.1", PORT), DashboardHandler)
     print(f"\n  Dashboard: http://localhost:{PORT}")
     print(f"  SSE stream: http://localhost:{PORT}/api/stream")
     print(f"  Recording API: POST /api/recording/start, /api/recording/stop\n")

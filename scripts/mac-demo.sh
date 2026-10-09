@@ -23,8 +23,12 @@ if [ -f "${PROJECT_ROOT}/.env" ]; then
     set +a
 fi
 
-PORT="${LLAMA_PORT:-8081}"
-DASHBOARD_PORT="${DASHBOARD_PORT:-9090}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$PROJECT_ROOT/scripts/port-env.sh"
+demo_ports_load "$PROJECT_ROOT" --allow-bound
+DASHBOARD_PORT="$PORT"
+PORT="$LLAMA_PORT"
+
 DASHBOARD_LOG="/tmp/dashboard-mac.log"
 
 GREEN='\033[0;32m'

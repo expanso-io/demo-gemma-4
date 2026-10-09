@@ -44,7 +44,8 @@ class TestEnvironmentDefaults:
         assert "edge-cam-001" in script_content
 
     def test_default_inference_url(self, script_content):
-        assert "http://localhost:8081" in script_content
+        assert "http://localhost:$LLAMA_PORT" in script_content
+        assert 'demo_ports_load "$SCRIPT_DIR" --allow-bound' in script_content
 
     def test_default_capture_interval(self, script_content):
         assert "CAPTURE_INTERVAL" in script_content

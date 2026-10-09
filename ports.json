@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "demo": "demo-gemma-4",
+  "ports": {
+    "PORT": 24200,
+    "EDGE_API_PORT": 24201,
+    "LLAMA_PORT": 24202,
+    "GATEWAY_PORT": 24203,
+    "PUBLIC_DASHBOARD_PORT": 24204
+  }
+}
