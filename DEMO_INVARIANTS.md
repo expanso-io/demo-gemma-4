@@ -6,6 +6,10 @@ to 2026-10-20. Every demo worker loads this before touching UI, lifecycle, or
 recording. It is short on purpose: `_demo-kit/` remains the full reference.
 A rule here outranks a rule in a single demo's docs.
 
+Demos are visual and high-level. They show the story; they are not proof
+points. No evidence panels, proof strips, claim substantiation or
+citations. Things on screen still run for real (real Cloud, real model).
+
 ## Lifecycle
 
 - `just up` is the only start command. It deploys or updates the Cloud
@@ -37,7 +41,7 @@ A rule here outranks a rule in a single demo's docs.
   with particles, and numbers add up across stages.
 - A page refresh shows the true current state: no phantom particles or jobs.
 - Never show "mock", "replay", "recorded", or "live demo". Say "topology".
-  Verify against the real service (real Jev, real Cloud), not a stub.
+  Run against the real service (real Jev, real Cloud), not a stub.
 - If David cannot explain an element in one sentence, cut it or rename it.
   Pipelines are named for what they do.
 
@@ -45,7 +49,7 @@ A rule here outranks a rule in a single demo's docs.
 
 - One 16:9 frame at 1920x1080. No internal scrollbars, no horizontal scroll;
   size boxes to their content. Depth goes on extra browser tabs (data,
-  evidence, slides), not scroll.
+  slides), not scroll.
 - Flow left to right: sources converge on one entry point into the Expanso
   node, the pipeline is drawn inside it, and one exit fans out to the
   destinations.
