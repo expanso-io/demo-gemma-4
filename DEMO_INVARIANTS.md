@@ -21,6 +21,8 @@ citations. Things on screen still run for real (real Cloud, real model).
   pipelines and its state and log files. Zero orphans; verify with `ps`/`lsof`.
 - Pipelines are toggled by David in Expanso Cloud, never from the web page.
   The board shows observed Cloud and Edge state.
+- Every pipeline writes logs and real input/output so Expanso Cloud shows
+  them: the logging view and input/output monitoring are part of the demo.
 - Credentials: the shared `expanso-demos` workspace from the demos `.env`,
   through a project-local profile. Never the global Expanso profile. Never
   the macOS Keychain.
