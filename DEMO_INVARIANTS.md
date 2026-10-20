@@ -57,8 +57,10 @@ A rule here outranks a rule in a single demo's docs.
 - Few words, large elements, progressive disclosure across pages. Objects
   stay in place from page to page.
 - Palette, theme and iconography come from the subject. Take interaction and
-  composition from Space Force, NICU and oil-gas; never their colors. Draw
-  real subject graphics (Paper, icon libraries, source-system logos).
+  composition from Space Force (`demo-space-force-edge-routing`), NICU
+  (`demo-intel-nicu-edge`) and oil-gas (`demo-oil-gas-motherduck`); never
+  their palettes. Draw real subject graphics (Paper, icon libraries,
+  source-system logos).
 - Arrows at least 2px with larger endpoints; links never clipped.
 
 ## Story and recording
