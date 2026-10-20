@@ -61,10 +61,12 @@ citations. Things on screen still run for real (real Cloud, real model).
 - Few words, large elements, progressive disclosure across pages. Objects
   stay in place from page to page.
 - Palette, theme and iconography come from the subject. Take interaction and
-  composition from Space Force (`demo-space-force-edge-routing`), NICU
-  (`demo-intel-nicu-edge`) and oil-gas (`demo-oil-gas-motherduck`); never
-  their palettes. Draw real subject graphics (Paper, icon libraries,
-  source-system logos).
+  composition from Space Force (`demo-space-force-edge-routing`), Factory
+  to BI (`demo-factory-powerbi`), NICU (`demo-intel-nicu-edge`) and oil-gas
+  (`demo-oil-gas-motherduck`); never their palettes. Draw real subject
+  graphics (Paper, icon libraries, source-system logos).
+- Prefer meaningful subject graphics and icons, plus useful labels the
+  presenter can point to, over explanatory text.
 - Arrows at least 2px with larger endpoints; links never clipped.
 
 ## Story and recording
